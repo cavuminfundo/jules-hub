@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Activity,
+  Calendar,
   Cpu,
-  RefreshCw,
-  Zap,
-  Palette,
-  Shield,
   Layers,
+  Palette,
+  RefreshCw,
+  Settings,
+  Shield,
+  Zap,
 } from 'lucide-react';
 import { api, ApiError } from './api';
 import type {
   EngineMode,
   HealthResponse,
+  HubConfig,
   ProjectInfo,
   Suggestion,
   TaskStatus,
@@ -27,9 +30,14 @@ import {
 import { DiffDrawer } from './components/DiffDrawer';
 import { WorktreeList } from './components/WorktreeList';
 import { ToastContainer } from './components/Toast';
+import { SettingsView } from './components/SettingsView';
+import { SchedulerPanel } from './components/SchedulerPanel';
 
 export const App: React.FC = () => {
-  // Global State
+  // Native tab routing ('cockpit' | 'scheduler' | 'settings') without react-router-dom
+  const [activeTab, setActiveTab] = useState<'cockpit' | 'scheduler' | 'settings'>('cockpit');
+
+  // Global Hub State
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string>('jules');
@@ -87,7 +95,6 @@ export const App: React.FC = () => {
         }
         if (p.status === 'fulfilled' && p.value.length > 0) {
           setProjects(p.value);
-          // If 'jules' is among projects, leave it, otherwise default to first
           const hasJules = p.value.some((proj) => proj.name === 'jules');
           if (!hasJules) {
             setSelectedRepo(p.value[0].name);
@@ -140,6 +147,20 @@ export const App: React.FC = () => {
     fetchWorktrees();
   }, [fetchSuggestions, fetchWorktrees]);
 
+  // Handle Discard Suggestion (Ignored in future scans)
+  const handleDiscardSuggestion = async (suggestionId: string) => {
+    try {
+      await api.discardSuggestion(suggestionId);
+      setSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
+      addToast('info', 'Suggerimento Scartato', 'Il suggerimento è stato ignorato e non ricomparirà nelle scansioni.');
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.detail : 'Errore durante l\'operazione di scarto.';
+      // Optimistically remove from state anyway
+      setSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
+      addToast('warning', 'Scartato Localmente', msg);
+    }
+  };
+
   // Handle Prune Worktree
   const handlePruneWorktree = async (path?: string) => {
     try {
@@ -148,7 +169,7 @@ export const App: React.FC = () => {
         addToast(
           'success',
           'Worktree Pruned',
-          path ? `Worktree rimosso con successo.` : 'Tutti i worktree sono stati rimossi.'
+          path ? 'Worktree rimosso con successo.' : 'Tutti i worktree sono stati rimossi.'
         );
         fetchWorktrees();
       } else {
@@ -223,7 +244,6 @@ export const App: React.FC = () => {
           res.message || 'Worktree inviato ad Antigravity Senior Review con successo!'
         );
       } else {
-        // Port 9000 offline or CDP failure
         addToast(
           'error',
           'CDP 9000 Offline',
@@ -244,10 +264,10 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      {/* Top Navigation Bar */}
+      {/* Top Navigation Bar with 3 Native Tabs */}
       <header className="border-b border-zinc-800 bg-zinc-900/90 backdrop-blur sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Logo & System Status */}
+          {/* Logo & System Title */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-base shadow-sm">
@@ -259,11 +279,11 @@ export const App: React.FC = () => {
                     Jules Hub
                   </h1>
                   <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60">
-                    v0.2.1
+                    v2.0
                   </span>
                 </div>
                 <div className="text-[11px] text-zinc-400">
-                  Autonomous Junior Coder Cockpit
+                  Autonomous Cockpit
                 </div>
               </div>
             </div>
@@ -276,6 +296,64 @@ export const App: React.FC = () => {
               </span>
             </div>
           </div>
+
+          {/* Native Tab Selector (role="tablist", aria-selected) */}
+          <nav
+            role="tablist"
+            aria-label="Navigazione Principale Jules Hub v2"
+            className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800"
+          >
+            <button
+              role="tab"
+              id="tab-cockpit"
+              aria-selected={activeTab === 'cockpit'}
+              aria-controls="panel-cockpit"
+              type="button"
+              onClick={() => setActiveTab('cockpit')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                activeTab === 'cockpit'
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Cockpit</span>
+            </button>
+
+            <button
+              role="tab"
+              id="tab-scheduler"
+              aria-selected={activeTab === 'scheduler'}
+              aria-controls="panel-scheduler"
+              type="button"
+              onClick={() => setActiveTab('scheduler')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                activeTab === 'scheduler'
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Scheduler</span>
+            </button>
+
+            <button
+              role="tab"
+              id="tab-settings"
+              aria-selected={activeTab === 'settings'}
+              aria-controls="panel-settings"
+              type="button"
+              onClick={() => setActiveTab('settings')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                activeTab === 'settings'
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Settings</span>
+            </button>
+          </nav>
 
           {/* Engine Selector & CDP indicator */}
           <div className="flex items-center gap-3">
@@ -310,144 +388,176 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Workspace & Filter Bar */}
-      <section className="border-b border-zinc-800/80 bg-zinc-900/40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
-          {/* Target Workspace Selector */}
-          <RepoSelector
-            projects={projects}
-            selectedRepo={selectedRepo}
-            onSelectRepo={(repo) => setSelectedRepo(repo)}
-            isLoading={isLoadingSuggestions}
-          />
+      {/* Main Tab Panels */}
+      <main className="flex-1 w-full">
+        {/* Cockpit Tab Panel */}
+        {activeTab === 'cockpit' ? (
+          <div id="panel-cockpit" role="tabpanel" aria-labelledby="tab-cockpit" className="flex flex-col">
+            {/* Filter Bar */}
+            <section className="border-b border-zinc-800/80 bg-zinc-900/40">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
+                {/* Target Workspace Selector */}
+                <RepoSelector
+                  projects={projects}
+                  selectedRepo={selectedRepo}
+                  onSelectRepo={(repo) => setSelectedRepo(repo)}
+                  isLoading={isLoadingSuggestions}
+                />
 
-          {/* Persona Filter Pills */}
-          <div className="flex items-center gap-1.5 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
-            <button
-              type="button"
-              onClick={() => setSelectedPersona('all')}
-              className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                selectedPersona === 'all'
-                  ? 'bg-zinc-800 text-zinc-100 shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              Tutti
-            </button>
+                {/* Persona Filter Pills */}
+                <div className="flex items-center gap-1.5 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPersona('all')}
+                    className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                      selectedPersona === 'all'
+                        ? 'bg-zinc-800 text-zinc-100 shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    Tutti
+                  </button>
 
-            <button
-              type="button"
-              onClick={() => setSelectedPersona('bolt')}
-              className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-semibold transition-colors ${
-                selectedPersona === 'bolt'
-                  ? 'bg-amber-950/80 text-amber-300 border border-amber-600/60 shadow-sm'
-                  : 'text-zinc-400 hover:text-amber-300'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5 text-amber-400" />
-              Bolt ⚡
-            </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPersona('bolt')}
+                    className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                      selectedPersona === 'bolt'
+                        ? 'bg-amber-950/80 text-amber-300 border border-amber-600/60 shadow-sm'
+                        : 'text-zinc-400 hover:text-amber-300'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    Bolt ⚡
+                  </button>
 
-            <button
-              type="button"
-              onClick={() => setSelectedPersona('palette')}
-              className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-semibold transition-colors ${
-                selectedPersona === 'palette'
-                  ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-600/60 shadow-sm'
-                  : 'text-zinc-400 hover:text-emerald-300'
-              }`}
-            >
-              <Palette className="w-3.5 h-3.5 text-emerald-400" />
-              Palette 🎨
-            </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPersona('palette')}
+                    className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                      selectedPersona === 'palette'
+                        ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-600/60 shadow-sm'
+                        : 'text-zinc-400 hover:text-emerald-300'
+                    }`}
+                  >
+                    <Palette className="w-3.5 h-3.5 text-emerald-400" />
+                    Palette 🎨
+                  </button>
 
-            <button
-              type="button"
-              onClick={() => setSelectedPersona('sentinel')}
-              className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-semibold transition-colors ${
-                selectedPersona === 'sentinel'
-                  ? 'bg-rose-950/80 text-rose-300 border border-rose-600/60 shadow-sm'
-                  : 'text-zinc-400 hover:text-rose-300'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5 text-rose-400" />
-              Sentinel 🛡️
-            </button>
-          </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPersona('sentinel')}
+                    className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                      selectedPersona === 'sentinel'
+                        ? 'bg-rose-950/80 text-rose-300 border border-rose-600/60 shadow-sm'
+                        : 'text-zinc-400 hover:text-rose-300'
+                    }`}
+                  >
+                    <Shield className="w-3.5 h-3.5 text-rose-400" />
+                    Sentinel 🛡️
+                  </button>
+                </div>
 
-          {/* Refresh Action */}
-          <button
-            type="button"
-            onClick={fetchSuggestions}
-            disabled={isLoadingSuggestions}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 transition-colors disabled:opacity-50"
-            title="Ricarica suggerimenti per il workspace"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSuggestions ? 'animate-spin' : ''}`} />
-            <span>Riesegui Scansione</span>
-          </button>
-        </div>
-      </section>
+                {/* Refresh Action */}
+                <button
+                  type="button"
+                  onClick={fetchSuggestions}
+                  disabled={isLoadingSuggestions}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 transition-colors disabled:opacity-50"
+                  title="Ricarica suggerimenti per il workspace"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSuggestions ? 'animate-spin' : ''}`} />
+                  <span>Riesegui Scansione</span>
+                </button>
+              </div>
+            </section>
 
-      {/* Main Content Dashboard */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
-        {/* Suggestion Board Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
-              <span>Bacheca Suggerimenti Micro-Patch (&lt; 50 righe)</span>
-              {!isLoadingSuggestions && (
-                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">
-                  {suggestions.length}
-                </span>
+            {/* Dashboard Workspace */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+              {/* Suggestion Board Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+                    <span>Bacheca Suggerimenti Micro-Patch (&lt; 50 righe)</span>
+                    {!isLoadingSuggestions ? (
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">
+                        {suggestions.length}
+                      </span>
+                    ) : null}
+                  </h2>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Identificati autonomamente dai modelli Bolt, Palette e Sentinel nei repository del sistema.
+                  </p>
+                </div>
+              </div>
+
+              {/* Suggestions Grid */}
+              {isLoadingSuggestions ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <SuggestionSkeleton />
+                  <SuggestionSkeleton />
+                  <SuggestionSkeleton />
+                </div>
+              ) : suggestions.length === 0 ? (
+                <SuggestionEmptyState
+                  repoName={selectedRepo}
+                  onRefresh={fetchSuggestions}
+                />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {suggestions.map((suggestion) => (
+                    <SuggestionCard
+                      key={suggestion.id}
+                      suggestion={suggestion}
+                      onRunInJules={handleRunInJules}
+                      onEscalateToAntigravity={handleEscalate}
+                      onDiscard={handleDiscardSuggestion}
+                      isRunning={executingSuggestionId === suggestion.id}
+                      isEscalating={escalatingSuggestionId === suggestion.id}
+                    />
+                  ))}
+                </div>
               )}
-            </h2>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              Identificati autonomamente dai modelli Bolt, Palette e Sentinel nei repository del sistema.
-            </p>
-          </div>
-        </div>
 
-        {/* Suggestions Grid */}
-        {isLoadingSuggestions ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            <SuggestionSkeleton />
-            <SuggestionSkeleton />
-            <SuggestionSkeleton />
+              {/* Worktree Monitor Section */}
+              <div className="pt-4">
+                <WorktreeList
+                  worktrees={worktrees}
+                  onPrune={handlePruneWorktree}
+                  onRefresh={fetchWorktrees}
+                  isLoading={isLoadingWorktrees}
+                />
+              </div>
+            </div>
           </div>
-        ) : suggestions.length === 0 ? (
-          <SuggestionEmptyState
-            repoName={selectedRepo}
-            onRefresh={fetchSuggestions}
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {suggestions.map((suggestion) => (
-              <SuggestionCard
-                key={suggestion.id}
-                suggestion={suggestion}
-                onRunInJules={handleRunInJules}
-                onEscalateToAntigravity={handleEscalate}
-                isRunning={executingSuggestionId === suggestion.id}
-                isEscalating={escalatingSuggestionId === suggestion.id}
-              />
-            ))}
-          </div>
-        )}
+        ) : null}
 
-        {/* Worktree Monitor Section */}
-        <div className="pt-4">
-          <WorktreeList
-            worktrees={worktrees}
-            onPrune={handlePruneWorktree}
-            onRefresh={fetchWorktrees}
-            isLoading={isLoadingWorktrees}
-          />
-        </div>
+        {/* Scheduler Tab Panel */}
+        {activeTab === 'scheduler' ? (
+          <div id="panel-scheduler" role="tabpanel" aria-labelledby="tab-scheduler" className="py-6">
+            <SchedulerPanel
+              onTriggerRepo={(repo) => {
+                addToast('info', 'Trigger Schedulatore', `Ciclo di scansione per ${repo} avviato.`);
+                fetchWorktrees();
+              }}
+            />
+          </div>
+        ) : null}
+
+        {/* Settings Tab Panel */}
+        {activeTab === 'settings' ? (
+          <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" className="py-6">
+            <SettingsView
+              onSaveConfig={(_cfg: HubConfig) => {
+                addToast('success', 'Configurazione Aggiornata', 'Impostazioni hub salvate con successo.');
+              }}
+            />
+          </div>
+        ) : null}
       </main>
 
-      {/* Diff & Live SSE Streaming Drawer */}
+      {/* Diff & Live SSE Streaming Drawer with Senior Gate */}
       <DiffDrawer
         isOpen={isDiffDrawerOpen}
         onClose={() => setIsDiffDrawerOpen(false)}
@@ -458,6 +568,9 @@ export const App: React.FC = () => {
         branchName={activeTaskBranch}
         onEscalate={() => handleEscalate()}
         isEscalating={escalatingSuggestionId === 'drawer_action'}
+        onPrCreated={(prUrl) => {
+          addToast('success', 'Pull Request Aperta', `PR creata con successo: ${prUrl}`);
+        }}
       />
 
       {/* Toast Notification Stack */}
@@ -465,7 +578,7 @@ export const App: React.FC = () => {
 
       {/* Footer */}
       <footer className="border-t border-zinc-800 bg-zinc-950 py-4 text-center text-xs text-zinc-500">
-        Jules Hub — Autonomous Junior Coder Architecture &bull; Non-root sandbox &bull; Quota Shield Active
+        Jules Hub v2 — Autonomous Cockpit &bull; Senior Review Gate &bull; Quota Shield Active
       </footer>
     </div>
   );

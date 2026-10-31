@@ -116,3 +116,70 @@ export interface ToastMessage {
   title: string;
   message: string;
 }
+
+export interface OllamaInstance {
+  id: number;
+  name: string;
+  url: string;
+  enabled: boolean;
+  timeout_sec: number;
+}
+
+export interface OllamaProbeResult {
+  online_status: boolean;
+  latency_ms: number;
+  models_list: string[];
+  error?: string | null;
+}
+
+export interface RoleModelConfig {
+  provider: string; // 'ollama' | 'antigravity_cli' | 'cdp'
+  instance_id: number;
+  model_name: string;
+  fallback_provider?: string;
+  fallback_instance_id?: number;
+  fallback_model?: string;
+}
+
+export interface RepoScheduleConfig {
+  repo_name: string;
+  enabled: boolean;
+  interval_hours: number;
+  personas: string[];
+  max_pending_worktrees: number;
+  last_run_at?: string | null;
+  next_run_at?: string | null;
+}
+
+export interface HubConfig {
+  ollama_instances: OllamaInstance[];
+  junior_config: RoleModelConfig;
+  senior_config: RoleModelConfig;
+  senior_mode: string; // 'in_cockpit' | 'cdp'
+  cdp_host: string;
+  cdp_port: number;
+  max_diff_lines: number;
+  repo_schedules: RepoScheduleConfig[];
+}
+
+export interface SeniorReviewResult {
+  verdict: 'APPROVED' | 'REJECTED';
+  simple_explanation: string;
+  security_notes: string;
+  reviewer_model: string;
+  reviewed_at?: string;
+}
+
+export interface CreatePrResponse {
+  success: boolean;
+  task_id: string;
+  pr_url: string;
+  message: string;
+}
+
+export interface TriggerSchedulerResponse {
+  repo_name: string;
+  triggered: boolean;
+  triggered_at?: string;
+  status?: string;
+}

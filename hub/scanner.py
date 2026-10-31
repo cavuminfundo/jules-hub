@@ -13,7 +13,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Collection, Dict, List, Optional, Set, Union
 
 from hub.models import Suggestion
 
@@ -58,9 +58,11 @@ def find_suggestions(
     repo_path: Union[str, Path],
     mode: str = "all",
     category: str = "all",
+    ignored_ids: Optional[Union[Set[str], List[str], Collection[str]]] = None,
 ) -> List[Suggestion]:
     """
     Scan repository for concrete micro-improvements across Bolt, Palette, or Sentinel.
+    Filters out any suggestions matching ignored_ids.
     Returns a typed list of Suggestion models.
     """
     repo = Path(repo_path).resolve()
@@ -292,7 +294,12 @@ def find_suggestions(
         cat_clean = category.lower()
         raw_suggestions = [s for s in raw_suggestions if s.get("category") == cat_clean]
 
-    return [Suggestion(**s) for s in raw_suggestions]
+    ignored = set(ignored_ids) if ignored_ids else set()
+    suggestions = [Suggestion(**s) for s in raw_suggestions]
+    if ignored:
+        suggestions = [s for s in suggestions if s.id not in ignored]
+
+    return suggestions
 
 
 def get_failing_pr(

@@ -1,17 +1,7 @@
 {
   "pyproject.toml": {
-    "mtime": 1793462634.2959814,
-    "ast_hash": "e7148fce3c7cfa23cfb02e3cb666cdd2",
-    "semantic_hash": ""
-  },
-  "archive/jules_mcp/jules_mcp.py": {
-    "mtime": 1785240256.585371,
-    "ast_hash": "4b46d6c5462da565dd3f388b8be52f2d",
-    "semantic_hash": ""
-  },
-  "archive/test_mcp.py": {
-    "mtime": 1785198175.5123549,
-    "ast_hash": "1179c30462bc6d0eea7c48ca73386329",
+    "mtime": 1793466136.6345189,
+    "ast_hash": "9e72124b98bab40f9b2be965a5766a32",
     "semantic_hash": ""
   },
   "curator.py": {
@@ -45,8 +35,8 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1785231990.0808747,
-    "ast_hash": "5b69acb02837bfd8344748c4bc197d0e",
+    "mtime": 1793468108.6593819,
+    "ast_hash": "c994d18c6927bbc8231b3e7f08a9cbb3",
     "semantic_hash": ""
   },
   "journal/bolt.md": {
@@ -64,39 +54,34 @@
     "ast_hash": "d220382fbeac6b1601c866843e9dc0db",
     "semantic_hash": ""
   },
-  "pr_description.txt": {
-    "mtime": 1785196163.4301708,
-    "ast_hash": "bee868222a849efbc2d5356b7e44c323",
-    "semantic_hash": ""
-  },
   "hub/__init__.py": {
     "mtime": 1793462642.9029536,
     "ast_hash": "289e8cc57644d6217cf582a2214a939f",
     "semantic_hash": ""
   },
   "hub/app.py": {
-    "mtime": 1793464150.8335285,
-    "ast_hash": "1dec0df064e4a45d807f9428882b2575",
+    "mtime": 1793473452.7470636,
+    "ast_hash": "5d9c837bfa373d22d3a6434181720626",
     "semantic_hash": ""
   },
   "hub/cdp_bridge.py": {
-    "mtime": 1793464305.5154834,
-    "ast_hash": "125ce054ef9093c8218d9997e6abd4b1",
+    "mtime": 1793473266.4864113,
+    "ast_hash": "ba03a6f3d443fc75fe02f058a8c09f1d",
     "semantic_hash": ""
   },
   "hub/engine_router.py": {
-    "mtime": 1793463615.9371862,
-    "ast_hash": "68f839fcf9fc2c20d09955e8c79406f5",
+    "mtime": 1793473293.6441922,
+    "ast_hash": "071c9981ef18bac55ce50967ce081b42",
     "semantic_hash": ""
   },
   "hub/models.py": {
-    "mtime": 1793463050.4528158,
-    "ast_hash": "7fb9c135856dacef273582f7dc599a5f",
+    "mtime": 1793473200.761979,
+    "ast_hash": "f85006807b051e935659222abcd80444",
     "semantic_hash": ""
   },
   "hub/scanner.py": {
-    "mtime": 1793462905.6625001,
-    "ast_hash": "4f599605a2bd26246e8c2a5e5a06e9c9",
+    "mtime": 1793473330.8399055,
+    "ast_hash": "cb698b901d965f2254d641dfbea4a511",
     "semantic_hash": ""
   },
   "hub/worktree_manager.py": {
@@ -140,18 +125,18 @@
     "semantic_hash": ""
   },
   "ui/src/App.tsx": {
-    "mtime": 1793464681.7012413,
-    "ast_hash": "b4ca2bd6d99c77683f6b425aaf80dd20",
+    "mtime": 1793473439.438149,
+    "ast_hash": "a398761c97904d7756bc72f476392695",
     "semantic_hash": ""
   },
   "ui/src/api.ts": {
-    "mtime": 1793464509.2403705,
-    "ast_hash": "394c723d47892dfe2f133351002ebf55",
+    "mtime": 1793473209.2779024,
+    "ast_hash": "c204736342cfcd218ce042eb4a503305",
     "semantic_hash": ""
   },
   "ui/src/components/DiffDrawer.tsx": {
-    "mtime": 1793464574.8383243,
-    "ast_hash": "9d9e767ecf0d36310af37226d50f9bdc",
+    "mtime": 1793473305.0711024,
+    "ast_hash": "36117cc7984fbae1a9a56df782296e58",
     "semantic_hash": ""
   },
   "ui/src/components/RepoSelector.tsx": {
@@ -160,8 +145,8 @@
     "semantic_hash": ""
   },
   "ui/src/components/SuggestionCard.tsx": {
-    "mtime": 1793464547.565344,
-    "ast_hash": "529e12e875b6549e3fd4f9a5d5c49a5c",
+    "mtime": 1793473232.6926963,
+    "ast_hash": "1a4735750fb93cc1e8bcc99a36a72699",
     "semantic_hash": ""
   },
   "ui/src/components/Toast.tsx": {
@@ -180,8 +165,8 @@
     "semantic_hash": ""
   },
   "ui/src/types.ts": {
-    "mtime": 1793464495.7173796,
-    "ast_hash": "c77680bee43d6ce85b9cd1d58a2cc174",
+    "mtime": 1793473183.4091384,
+    "ast_hash": "93c1b90a6fd7fe67aab3915dce893ff9",
     "semantic_hash": ""
   },
   "ui/tailwind.config.js": {
@@ -222,6 +207,51 @@
   "ui/index.html": {
     "mtime": 1793464480.1233897,
     "ast_hash": "ead6b5b41dc91599ddc8c592b9983741",
+    "semantic_hash": ""
+  },
+  "data/hub_state.json": {
+    "mtime": 1793473553.905559,
+    "ast_hash": "99498c5ce27c853f38dd705f4c2b7177",
+    "semantic_hash": ""
+  },
+  "hub/config_store.py": {
+    "mtime": 1793473217.4248297,
+    "ast_hash": "3c434c4eb73fac8eae79fb94c9512a95",
+    "semantic_hash": ""
+  },
+  "hub/scheduler.py": {
+    "mtime": 1793473346.7747874,
+    "ast_hash": "4ec7fa9b503c5b90868d2b5bf9a2b89a",
+    "semantic_hash": ""
+  },
+  "tests/test_config_store.py": {
+    "mtime": 1793473228.588732,
+    "ast_hash": "c1b655e0540413909cfb998a44bd659f",
+    "semantic_hash": ""
+  },
+  "tests/test_scheduler_and_senior.py": {
+    "mtime": 1793473484.2648673,
+    "ast_hash": "b5a59e906603a5c13069fdf786fc74cd",
+    "semantic_hash": ""
+  },
+  "ui/src/components/SchedulerPanel.tsx": {
+    "mtime": 1793473395.7574399,
+    "ast_hash": "a82d0af0d346dd1c84b2834c01a11e21",
+    "semantic_hash": ""
+  },
+  "ui/src/components/SettingsView.tsx": {
+    "mtime": 1793473465.671982,
+    "ast_hash": "537a3082af725b7cef57a60781e7d063",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-10-31-jules-hub-v2-autonomous-cockpit.md": {
+    "mtime": 1793471461.0371165,
+    "ast_hash": "4aa5bca27fa4d6acae65c78b37418da0",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-10-31-jules-hub-v2-autonomous-cockpit-design.md": {
+    "mtime": 1793470369.776515,
+    "ast_hash": "8c45be2448e45311ca5d0aa8ecf2eabc",
     "semantic_hash": ""
   }
 }

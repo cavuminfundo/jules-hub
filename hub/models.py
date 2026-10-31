@@ -24,6 +24,8 @@ class TaskStatus(str, Enum):
     RETRY = "retry"
     FAILED = "failed"
     NEEDS_ESCALATION = "needs_escalation"
+    READY_FOR_SENIOR = "ready_for_senior"
+    NEEDS_SENIOR_FIX = "needs_senior_fix"
     COMPLETED = "completed"
 
 
@@ -230,3 +232,95 @@ PERSONAS: Dict[str, Dict[str, Any]] = {
         "pr_prefix": "🛡️ Sentinel: [security improvement]",
     },
 }
+
+
+class OllamaInstance(BaseModel):
+    """Configuration for an Ollama server instance."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: int
+    name: str
+    url: str
+    enabled: bool = True
+    timeout_sec: int = 30
+
+
+class OllamaProbeResult(BaseModel):
+    """Health and model probe result from an Ollama instance endpoint."""
+    model_config = ConfigDict(extra="ignore")
+
+    online_status: bool
+    latency_ms: float
+    models_list: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+class RoleModelConfig(BaseModel):
+    """Model and provider assignment for Junior or Senior role."""
+    model_config = ConfigDict(extra="ignore")
+
+    provider: str = "ollama"  # "ollama" | "antigravity_cli" | "cdp"
+    instance_id: int = 1
+    model_name: str = "qwen2.5-coder"
+    fallback_provider: Optional[str] = "antigravity_cli"
+    fallback_instance_id: Optional[int] = None
+    fallback_model: Optional[str] = "flash"
+
+
+class RepoScheduleConfig(BaseModel):
+    """Periodic curation schedule configuration for a repository."""
+    model_config = ConfigDict(extra="ignore")
+
+    repo_name: str
+    enabled: bool = True
+    interval_hours: int = 6
+    personas: List[str] = Field(default_factory=lambda: ["bolt", "palette", "sentinel"])
+    max_pending_worktrees: int = 3
+    last_run_at: Optional[str] = None
+    next_run_at: Optional[str] = None
+
+
+class HubConfig(BaseModel):
+    """Global hub configuration persisted to data/hub_config.json."""
+    model_config = ConfigDict(extra="ignore")
+
+    ollama_instances: List[OllamaInstance] = Field(
+        default_factory=lambda: [
+            OllamaInstance(id=1, name="GPU Server 24/7", url="http://192.168.88.117:11434", enabled=True, timeout_sec=30),
+            OllamaInstance(id=2, name="Workstation RTX 5070 Ti", url="http://100.102.204.70:11434", enabled=True, timeout_sec=15),
+        ]
+    )
+    junior_config: RoleModelConfig = Field(default_factory=RoleModelConfig)
+    senior_config: RoleModelConfig = Field(
+        default_factory=lambda: RoleModelConfig(provider="cdp", model_name="Gemini 4 Argon (Low)")
+    )
+    senior_mode: str = "cdp"  # "in_cockpit" | "cdp"
+    cdp_host: str = "127.0.0.1"
+    cdp_port: int = 9000
+    max_diff_lines: int = 50
+    repo_schedules: List[RepoScheduleConfig] = Field(default_factory=list)
+
+
+class SeniorReviewVerdict(str, Enum):
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
+class SeniorReviewResult(BaseModel):
+    """Outcome of Senior Review audit gate."""
+    model_config = ConfigDict(extra="ignore")
+
+    verdict: str  # "APPROVED" | "REJECTED"
+    simple_explanation: str
+    security_notes: str
+    reviewer_model: str
+    reviewed_at: Optional[str] = None
+
+
+class HubState(BaseModel):
+    """Runtime state persisted to data/hub_state.json."""
+    model_config = ConfigDict(extra="ignore")
+
+    ignored_suggestions: List[str] = Field(default_factory=list)
+    task_reviews: Dict[str, SeniorReviewResult] = Field(default_factory=dict)
+

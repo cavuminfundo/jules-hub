@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import httpx
@@ -21,6 +22,45 @@ logger = logging.getLogger("hub.cdp_bridge")
 
 DEFAULT_CDP_HOST = os.environ.get("CDP_HOST", "127.0.0.1")
 DEFAULT_CDP_PORT = int(os.environ.get("CDP_PORT", "9000"))
+
+
+async def probe_ollama_instance(url: str, timeout: float = 5.0) -> Dict[str, Any]:
+    """
+    Probe an Ollama instance endpoint (/api/tags) asynchronously via httpx.
+    Returns online status, latency in milliseconds, and installed model tags.
+    Never raises exceptions.
+    """
+    target_url = f"{url.rstrip('/')}/api/tags"
+    start_time = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(target_url)
+            latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            if resp.status_code == 200:
+                data = resp.json()
+                models = [m.get("name") for m in data.get("models", []) if isinstance(m, dict) and "name" in m]
+                return {
+                    "online_status": True,
+                    "latency_ms": latency_ms,
+                    "models_list": models,
+                    "error": None,
+                }
+            return {
+                "online_status": False,
+                "latency_ms": latency_ms,
+                "models_list": [],
+                "error": f"HTTP {resp.status_code}: {resp.text[:100]}",
+            }
+    except (httpx.ConnectError, ConnectionRefusedError, OSError) as e:
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        return {"online_status": False, "latency_ms": latency_ms, "models_list": [], "error": f"Connection failed: {e}"}
+    except (httpx.TimeoutException, asyncio.TimeoutError) as e:
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        return {"online_status": False, "latency_ms": latency_ms, "models_list": [], "error": f"Timeout after {timeout}s: {e}"}
+    except Exception as e:
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        return {"online_status": False, "latency_ms": latency_ms, "models_list": [], "error": f"Unexpected error: {e}"}
+
 
 
 class CDPResponse(BaseCDPResponse):
@@ -163,3 +203,101 @@ class CDPBridge:
             logger.error("Unexpected error during CDP escalation: %s", e)
             err_msg = f"Unexpected CDP error: {e}"
             return CDPResponse(success=False, message=err_msg, error=err_msg)
+
+    async def get_available_models(self) -> List[str]:
+        """
+        Query Antigravity Model Picker via CDP Runtime.evaluate or return default models.
+        """
+        fallback_models = [
+            "Gemini 4 Argon (Low)",
+            "Gemini 4 Argon (Medium)",
+            "Gemini 2.5 Pro",
+            "Gemini 2.5 Flash",
+        ]
+        ws_url, err = await self.get_debugger_url()
+        if not ws_url or err:
+            return fallback_models
+
+        eval_expression = """
+            (() => {
+                const picker = document.querySelector('[data-testid="model-picker"]');
+                if (!picker) return null;
+                const options = Array.from(picker.querySelectorAll('option, [role="option"]'));
+                return options.map(o => (o.textContent || '').trim()).filter(Boolean);
+            })()
+        """
+        cdp_cmd = {
+            "id": 2,
+            "method": "Runtime.evaluate",
+            "params": {"expression": eval_expression, "returnByValue": True},
+        }
+        try:
+            async with websockets.connect(ws_url, open_timeout=self.timeout, close_timeout=self.timeout) as ws:
+                await ws.send(json.dumps(cdp_cmd))
+                raw = await asyncio.wait_for(ws.recv(), timeout=self.timeout)
+                resp_data = json.loads(raw)
+                models = resp_data.get("result", {}).get("result", {}).get("value")
+                if isinstance(models, list) and len(models) > 0:
+                    return models
+        except Exception as e:
+            logger.warning("CDP model discovery failed: %s; using fallbacks", e)
+        return fallback_models
+
+    async def select_model_and_escalate(self, model_name: str, req: EscalateRequest) -> CDPResponse:
+        """
+        Select senior model in Antigravity DOM and trigger Senior Review via CDP evaluate.
+        """
+        ws_url, err = await self.get_debugger_url()
+        if not ws_url or err:
+            return CDPResponse(success=False, message=err or "CDP discovery failed", error=err or "CDP discovery failed")
+
+        payload = {
+            "action": "senior_review",
+            "selected_model": model_name,
+            "repo": req.repo,
+            "worktree_path": req.worktree_path,
+            "branch": req.branch,
+            "diff_summary": req.diff_summary,
+            "test_status": req.test_status,
+            "instruction": req.instruction,
+        }
+
+        expression = f"""
+            (() => {{
+                if (window.selectAntigravityModel) {{
+                    window.selectAntigravityModel({json.dumps(model_name)});
+                }}
+                if (window.triggerSeniorReview) {{
+                    return window.triggerSeniorReview({json.dumps(payload)});
+                }}
+                console.log('Senior Review Escalated', {json.dumps(payload)});
+                return {{ status: 'escalated', model: {json.dumps(model_name)} }};
+            }})()
+        """
+        cdp_cmd = {
+            "id": 3,
+            "method": "Runtime.evaluate",
+            "params": {
+                "expression": expression,
+                "returnByValue": True,
+                "awaitPromise": True,
+            },
+        }
+
+        try:
+            async with websockets.connect(ws_url, open_timeout=self.timeout, close_timeout=self.timeout) as ws:
+                await ws.send(json.dumps(cdp_cmd))
+                raw_response = await asyncio.wait_for(ws.recv(), timeout=self.timeout)
+                resp_data = json.loads(raw_response)
+                if "error" in resp_data:
+                    err_msg = f"CDP Runtime.evaluate returned error: {resp_data['error']}"
+                    return CDPResponse(success=False, message=err_msg, error=err_msg, response_data=resp_data)
+                return CDPResponse(
+                    success=True,
+                    message=f"Escalated senior review to model '{model_name}' for {req.repo} ({req.branch})",
+                    response_data=resp_data,
+                )
+        except Exception as e:
+            err_msg = f"CDP WebSocket escalation failed: {e}"
+            return CDPResponse(success=False, message=err_msg, error=err_msg)
+

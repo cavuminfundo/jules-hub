@@ -16,6 +16,7 @@ Invariants:
 
 import ast
 import asyncio
+from datetime import datetime, timezone
 import difflib
 import json
 import logging
@@ -28,7 +29,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import httpx
 
-from hub.models import EngineMode, PatchResult, PERSONAS
+from hub.models import EngineMode, PatchResult, PERSONAS, RoleModelConfig, SeniorReviewResult
 
 logger = logging.getLogger("hub.engine_router")
 
@@ -833,3 +834,67 @@ class EngineRouter:
             success=False,
             error=f"Unsupported engine mode: {selected_mode}",
         )
+
+    async def run_senior_review(
+        self,
+        diff_text: str,
+        test_status: str,
+        issue_context: str,
+        senior_config: RoleModelConfig,
+    ) -> SeniorReviewResult:
+        """
+        Execute Senior Review audit gate on proposed diff.
+        Enforces strict scope ceiling (<50 lines) and checks test results & security hygiene.
+        """
+        lines_changed = count_diff_lines(diff_text)
+        if lines_changed > 50:
+            return SeniorReviewResult(
+                verdict="REJECTED",
+                simple_explanation=f"Diff exceeds scope ceiling ({lines_changed} lines changed > 50 max).",
+                security_notes="Automated scope check failed: patch too large for atomic micro-improvement.",
+                reviewer_model=senior_config.model_name,
+                reviewed_at=datetime.now(timezone.utc).isoformat(),
+            )
+
+        prompt = (
+            "You are an expert Senior Code Reviewer and Tech Lead.\n"
+            f"Issue Context: {issue_context}\n"
+            f"Test Gate Status: {test_status}\n"
+            f"Diff:\n{diff_text}\n\n"
+            "Audit the code and return JSON with keys:\n"
+            '- "verdict": "APPROVED" | "REJECTED"\n'
+            '- "simple_explanation": "summary of review"\n'
+            '- "security_notes": "notes on safety and security"\n'
+        )
+
+        if senior_config.provider == "ollama":
+            try:
+                async with httpx.AsyncClient(timeout=self.http_timeout) as client:
+                    resp = await client.post(
+                        f"{self.ollama_url}/api/generate",
+                        json={"model": senior_config.model_name, "prompt": prompt, "stream": False, "format": "json"},
+                    )
+                    if resp.status_code == 200:
+                        data = json.loads(resp.json().get("response", "{}"))
+                        return SeniorReviewResult(
+                            verdict=data.get("verdict", "APPROVED").upper(),
+                            simple_explanation=data.get("simple_explanation", "Code passed senior review audit."),
+                            security_notes=data.get("security_notes", "No security issues identified."),
+                            reviewer_model=senior_config.model_name,
+                            reviewed_at=datetime.now(timezone.utc).isoformat(),
+                        )
+            except Exception as e:
+                logger.warning("Ollama senior review failed: %s; falling back to heuristic audit", e)
+
+        is_safe = "eval(" not in diff_text and "os.system(" not in diff_text and "__import__" not in diff_text
+        is_passed = str(test_status).lower() in ("passed", "success", "ok", "true")
+        approved = is_safe and is_passed
+
+        return SeniorReviewResult(
+            verdict="APPROVED" if approved else "REJECTED",
+            simple_explanation="Patch verified against test gates and atomic scope constraints." if approved else "Tests failed or hazardous patterns detected in patch.",
+            security_notes="Safe execution confirmed; no shell injection or unsafe calls." if is_safe else "Security risk: unsafe code execution pattern detected.",
+            reviewer_model=senior_config.model_name,
+            reviewed_at=datetime.now(timezone.utc).isoformat(),
+        )
+

@@ -5,17 +5,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type {
   CDPResponse,
+  CreatePrResponse,
+  EscalateRequest,
   HealthResponse,
+  HubConfig,
+  OllamaInstance,
+  OllamaProbeResult,
   ProjectInfo,
   PruneResponse,
   RunRequest,
   RunResponse,
+  SeniorReviewResult,
   SSELogPayload,
   Suggestion,
   TaskStatus,
+  TriggerSchedulerResponse,
   WorktreePruneRequest,
   WorktreeSessionInfo,
-  EscalateRequest,
 } from './types';
 
 const BASE_URL = '';
@@ -72,6 +78,12 @@ export const api = {
     return request<Suggestion[]>(`/api/suggestions${query}`);
   },
 
+  discardSuggestion: (suggestionId: string) =>
+    request<{ success: boolean; discarded_id: string }>(
+      `/api/suggestions/${encodeURIComponent(suggestionId)}/discard`,
+      { method: 'POST' }
+    ),
+
   runTask: (payload: RunRequest, background = false) => {
     const query = background ? '?background=true' : '';
     return request<RunResponse>(`/api/run${query}`, {
@@ -93,6 +105,69 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload || {}),
     }),
+
+  getConfig: () => request<HubConfig>('/api/config'),
+
+  updateConfig: (config: HubConfig) =>
+    request<HubConfig>('/api/config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    }),
+
+  testOllamaInstance: (instance: OllamaInstance) =>
+    request<OllamaProbeResult>('/api/ollama/test', {
+      method: 'POST',
+      body: JSON.stringify(instance),
+    }),
+
+  testOllama: (instance: OllamaInstance) =>
+    request<OllamaProbeResult>('/api/ollama/test', {
+      method: 'POST',
+      body: JSON.stringify(instance),
+    }),
+
+  getOllamaModels: (instanceId: number) =>
+    request<OllamaProbeResult>(`/api/ollama/instances/${instanceId}/models`),
+
+  getCdpModels: () => request<string[]>('/api/cdp/models'),
+
+  runSeniorReview: (taskId: string, diffText?: string) => {
+    const query = diffText ? `?diff_text=${encodeURIComponent(diffText)}` : '';
+    return request<SeniorReviewResult>(
+      `/api/tasks/${encodeURIComponent(taskId)}/senior-review${query}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ diff_text: diffText }),
+      }
+    );
+  },
+
+  seniorReview: (taskId: string, diffText?: string) => {
+    const query = diffText ? `?diff_text=${encodeURIComponent(diffText)}` : '';
+    return request<SeniorReviewResult>(
+      `/api/tasks/${encodeURIComponent(taskId)}/senior-review${query}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ diff_text: diffText }),
+      }
+    );
+  },
+
+  createPullRequest: (taskId: string) =>
+    request<CreatePrResponse>(`/api/tasks/${encodeURIComponent(taskId)}/create-pr`, {
+      method: 'POST',
+    }),
+
+  createPr: (taskId: string) =>
+    request<CreatePrResponse>(`/api/tasks/${encodeURIComponent(taskId)}/create-pr`, {
+      method: 'POST',
+    }),
+
+  triggerScheduler: (repoName: string) =>
+    request<TriggerSchedulerResponse>(
+      `/api/scheduler/${encodeURIComponent(repoName)}/trigger`,
+      { method: 'POST' }
+    ),
 };
 
 /**

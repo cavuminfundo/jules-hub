@@ -8,6 +8,7 @@ import {
   FileCode2,
   AlertCircle,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import type { Suggestion } from '../types';
 
@@ -15,6 +16,7 @@ interface SuggestionCardProps {
   suggestion: Suggestion;
   onRunInJules: (suggestion: Suggestion) => void;
   onEscalateToAntigravity: (suggestion: Suggestion) => void;
+  onDiscard?: (id: string) => void;
   isRunning?: boolean;
   isEscalating?: boolean;
 }
@@ -23,6 +25,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
   suggestion,
   onRunInJules,
   onEscalateToAntigravity,
+  onDiscard,
   isRunning = false,
   isEscalating = false,
 }) => {
@@ -70,9 +73,22 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
               {suggestion.category}
             </span>
           </div>
-          <span className="text-xs text-zinc-500 font-mono">
-            {suggestion.id}
-          </span>
+          <div className="flex items-center gap-2">
+            {onDiscard && (
+              <button
+                type="button"
+                onClick={() => onDiscard(suggestion.id)}
+                title="Scarta suggerimento"
+                aria-label={`Scarta suggerimento ${suggestion.id}`}
+                className="p-1 rounded text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <span className="text-xs text-zinc-500 font-mono">
+              {suggestion.id}
+            </span>
+          </div>
         </div>
 
         {/* Title */}

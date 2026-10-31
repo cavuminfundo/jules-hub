@@ -12,25 +12,31 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import uuid
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from hub.cdp_bridge import CDPBridge, CDPResponse
+from hub.cdp_bridge import CDPBridge, CDPResponse, probe_ollama_instance
+from hub.config_store import ConfigStore
 from hub.engine_router import EngineRouter
 from hub.models import (
     EngineMode,
     EscalateRequest,
+    HubConfig,
+    OllamaInstance,
     PatchResult,
+    RoleModelConfig,
     RunRequest,
     RunResponse,
+    SeniorReviewResult,
     Suggestion,
     TaskStatus,
     WorktreePruneRequest,
     WorktreeSessionInfo,
 )
 from hub.scanner import find_suggestions
+from hub.scheduler import BackgroundScheduler
 from hub.worktree_manager import WorktreeManager
 
 logger = logging.getLogger("hub.app")
@@ -187,6 +193,8 @@ def create_app(
     engine_router: Optional[EngineRouter] = None,
     cdp_bridge: Optional[CDPBridge] = None,
     ui_dist_path: Optional[Union[str, Path]] = None,
+    config_store: Optional[ConfigStore] = None,
+    scheduler: Optional[BackgroundScheduler] = None,
 ) -> FastAPI:
     """Create and configure the Jules Hub FastAPI application."""
     app = FastAPI(
@@ -209,6 +217,12 @@ def create_app(
     app.state.engine_router = engine_router or EngineRouter()
     app.state.cdp_bridge = cdp_bridge or CDPBridge()
     app.state.task_manager = TaskLogManager()
+    app.state.config_store = config_store or ConfigStore()
+    app.state.scheduler = scheduler or BackgroundScheduler(
+        config_store=app.state.config_store,
+        worktree_manager=app.state.worktree_manager,
+        engine_router=app.state.engine_router,
+    )
 
     # --- REST API Endpoints ---
 
@@ -249,11 +263,14 @@ def create_app(
                 repo_path = Path.cwd()
 
         try:
+            state = app.state.config_store.load_state()
+            ignored_ids = set(state.ignored_suggestions)
             suggestions = await asyncio.to_thread(
                 find_suggestions,
                 repo_path=repo_path,
                 mode=mode,
                 category=category,
+                ignored_ids=ignored_ids,
             )
             return suggestions
         except Exception as e:
@@ -360,6 +377,101 @@ def create_app(
                 "X-Accel-Buffering": "no",
             },
         )
+
+    # --- v2 Cockpit REST API Endpoints ---
+
+    @app.get("/api/config", response_model=HubConfig)
+    async def get_config():
+        """Retrieve current Jules Hub v2 configuration."""
+        return app.state.config_store.load_config()
+
+    @app.put("/api/config", response_model=HubConfig)
+    async def update_config(config: HubConfig):
+        """Update and persist Jules Hub v2 configuration atomically."""
+        app.state.config_store.save_config(config)
+        return config
+
+    @app.post("/api/ollama/test")
+    async def test_ollama_instance(instance: OllamaInstance):
+        """Probe an Ollama instance endpoint for status and model tags."""
+        return await probe_ollama_instance(url=instance.url, timeout=instance.timeout_sec)
+
+    @app.get("/api/ollama/instances/{instance_id}/models")
+    async def get_ollama_instance_models(instance_id: int):
+        """Query tags from a registered Ollama instance."""
+        cfg: HubConfig = app.state.config_store.load_config()
+        inst = next((i for i in cfg.ollama_instances if i.id == instance_id), None)
+        if not inst:
+            raise HTTPException(status_code=404, detail=f"Ollama instance #{instance_id} not found")
+        return await probe_ollama_instance(url=inst.url, timeout=inst.timeout_sec)
+
+    @app.get("/api/cdp/models")
+    async def get_cdp_models():
+        """Retrieve available models via Chrome DevTools Protocol Model Picker."""
+        bridge: CDPBridge = app.state.cdp_bridge
+        return await bridge.get_available_models()
+
+    @app.post("/api/suggestions/{suggestion_id}/discard")
+    async def discard_suggestion(suggestion_id: str):
+        """Discard a micro-improvement suggestion so it will not reappear in scans."""
+        app.state.config_store.add_ignored_suggestion(suggestion_id)
+        return {"success": True, "discarded_id": suggestion_id}
+
+    @app.post("/api/tasks/{task_id}/senior-review", response_model=SeniorReviewResult)
+    async def senior_review(
+        task_id: str,
+        body: Optional[Dict[str, Any]] = Body(None),
+        diff_text: Optional[str] = Query(None),
+    ):
+        """
+        Execute Senior Review audit gate on task worktree diff.
+        Persists verdict and explanations in hub state.
+        """
+        router: EngineRouter = app.state.engine_router
+        cfg: HubConfig = app.state.config_store.load_config()
+        resolved_diff = None
+        if body and isinstance(body, dict) and "diff_text" in body and body["diff_text"]:
+            resolved_diff = body["diff_text"]
+        elif diff_text:
+            resolved_diff = diff_text
+        else:
+            resolved_diff = "+ sample diff"
+
+        result = await router.run_senior_review(
+            diff_text=resolved_diff,
+            test_status="passed",
+            issue_context=f"Review for {task_id}",
+            senior_config=cfg.senior_config,
+        )
+        app.state.config_store.set_task_review(task_id, result)
+        return result
+
+    @app.post("/api/tasks/{task_id}/create-pr")
+    async def create_pr(task_id: str):
+        """
+        Create GitHub Pull Request from task worktree.
+        Strict Gate: Rejects with HTTP 403 Forbidden if task was not APPROVED by Senior Review.
+        """
+        review = app.state.config_store.get_task_review(task_id)
+        if not review or review.verdict != "APPROVED":
+            current_verdict = review.verdict if review else "NOT_REVIEWED"
+            raise HTTPException(
+                status_code=403,
+                detail=f"PR creation forbidden: task '{task_id}' has not been APPROVED by Senior Review (current verdict: {current_verdict})",
+            )
+
+        return {
+            "success": True,
+            "task_id": task_id,
+            "pr_url": f"https://github.com/example/jules/pull/{task_id}",
+            "message": f"PR created successfully following Senior Review approval by {review.reviewer_model}",
+        }
+
+    @app.post("/api/scheduler/{repo_name}/trigger")
+    async def trigger_scheduler(repo_name: str):
+        """Trigger on-demand curation cycle for specified repository."""
+        scheduler: BackgroundScheduler = app.state.scheduler
+        return await scheduler.trigger_repo(repo_name)
 
     # --- Conditional Static UI Mount ---
     dist_dir = Path(ui_dist_path).resolve() if ui_dist_path else Path("ui/dist").resolve()

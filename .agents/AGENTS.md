@@ -1,39 +1,42 @@
-# Workspace Agent Router — Jules
+# Workspace Agent Router — Jules Curator Hub
 
-> **Jules** is an AI execution & supervision workspace.
+> **Jules Curator Hub** is an autonomous, background worktree runner and code polishing engine.
+> It inherits the best architectural practices from Google Jules:
+> - **⚡ Bolt**: Performance & efficiency optimizer.
+> - **🎨 Palette**: Micro-UX & accessibility craftsperson.
+> - **🛡️ Sentinel**: Security, hardening & defense-in-depth guardian.
 
-## 📖 Repository Documentation Index
-Before starting any work, inspect the relevant documentation files below:
+## 📖 [ALL AGENTS] Repository Documentation Index
+Before starting any work, consult the project documentation:
 
-- **Global Agent Guidelines & Safety:** Refer to `~/.gemini/config/AGENTS.md` for execution rules, sub-agent invocation, skill orchestrator, and shell restrictions.
-- **Lessons Learned & Past Bugs:** Read [.agents/memory/lessons.md](file:///home/federico/jules/.agents/memory/lessons.md) before making modifications to prevent known operational errors.
+- **Global Agent Guidelines & Safety:** Refer to `~/.gemini/config/AGENTS.md` for shell rules and execution protocols.
+- **Curator Runner:** Inspect [curator.py](file:///home/federico/jules/curator.py) for the CLI entry point and worktree isolation lifecycle.
+- **Journals (Critical Learnings Only):**
+  - Performance: [journal/bolt.md](file:///home/federico/jules/journal/bolt.md)
+  - Micro-UX & a11y: [journal/palette.md](file:///home/federico/jules/journal/palette.md)
+  - Security & Hardening: [journal/sentinel.md](file:///home/federico/jules/journal/sentinel.md)
+- **Lessons Learned & Past Bugs:** Read [.agents/memory/lessons.md](file:///home/federico/jules/.agents/memory/lessons.md).
 
-## 🧠 Memory Protocol
-Always consult `.agents/memory/lessons.md` at the start of any task, and append newly learned lessons/fixes upon resolving issues.
+## 🛡️ [ALL AGENTS] Worktree Isolation & Safety Directives
+- **Zero Dirty Working Tree Guarantee:** Never modify files directly inside the primary working directories of target projects (`/home/federico/RoosterLab`, `/home/federico/ag2r`, etc.). All exploratory scans, optimizations, and test runs MUST occur inside dedicated isolated worktrees (`/home/federico/jules/worktrees/<project>-<mode>`).
+- **Hard Scope Ceiling (< 50 Lines):** Every automated intervention must be strictly smaller than 50 lines. Large refactors or architectural overhauls are forbidden.
+- **Zero-Noise Fallback:** If no clear, measurable win or fix is found, abort cleanly. Do not create empty diffs or micro-optimizations of cold paths.
+- **Automated Test Gate:** Modifications must never be committed without running the target project's automated test suite inside the worktree (`./run_fast_tests.sh`, `npx tsc`, `pytest`).
 
-## 🤖 Jules MCP Supervisor Protocol
+## 🛠️ [MASTER AGENT ONLY] Curator CLI Reference
+Invoke the curator via:
+```bash
+# Run a specific persona on a registered project:
+python3 /home/federico/jules/curator.py run --repo RoosterLab --mode bolt
+python3 /home/federico/jules/curator.py run --repo ag2r --mode palette
+python3 /home/federico/jules/curator.py run --repo SupervisOwl --mode sentinel
 
-> ⚠️ **STEP 0 OBBLIGATORIO (Skill Activation Protocol):**
-> Prima di eseguire qualsiasi chiamata a tool MCP (`jules-mcp` o `github-mcp-server`), l'agente DEVE obbligatoriamente attivare lo **Skill Orchestrator**:
-> 1. Cercare la skill `jules-supervisor` in `/home/federico/skills_library/CATALOG.json` tramite `grep_search`.
-> 2. Leggere ed caricare le istruzioni complete da [`/home/federico/skills_library/jules-supervisor/SKILL.md`](file:///home/federico/skills_library/jules-supervisor/SKILL.md) tramite `view_file`.
+# CI Auto-Fixer:
+python3 /home/federico/jules/curator.py fix-ci --repo RoosterLab --pr 42
 
-When orchestrating and supervising Jules AI sessions via MCP:
-
-1. **Session & Activity Inspection (`jules-mcp`)**:
-   - Utilizzare i tool MCP ufficiali di `jules-mcp` per ottenere l'elenco delle sessioni attive ed ispezionare le attività ed i piani proposti o i blocchi in attesa.
-
-2. **Session Cleanup (Chiuse / Inattive)**:
-   - Eliminare tutte le sessioni chiuse o inattive (`COMPLETED`, `FINISHED`, `TERMINATED`, `CANCELLED`, `FAILED`, `EXPIRED`, `CLOSED`) che **NON abbiano in sospeso la richiesta di approvazione piano o di input utente**.
-
-3. **Plan Mentoring & Feasibility Check (Fino alla PR)**:
-   - Valutare i piani estratti confrontandoli con le convenzioni del repository (`AGENTS.md`, `.agents/memory/lessons.md`).
-   - Se il piano è consono e ben strutturato, approvarlo; se presenta lacune o deviazioni, inviare indicazioni puntuali di mentoring guidando Jules fino all'apertura della PR.
-   - 🛑 **NO PR MERGING**: La skill NON effettua il merge delle Pull Request su GitHub.
-
-4. **Regola di Cancellazione Sessione su Rebase**:
-   - Poiché Jules non può eseguire il git rebase, **se la PR generata da Jules richiede un rebase (presenta conflitti)**, eliminare immediatamente la sessione corrispettiva.
-
-## 🐳 Docker Deployment & Container Policy
-- **Immagini Precompilate Obbligatorie (GHCR)**: Il servizio `jules_mcp_server` in produzione DEVE sempre utilizzare l'immagine Docker ufficiale precompilata `ghcr.io/cavuminfundo/jules-mcp-server:latest`.
-- 🛑 **Divieto Mount Volumi Sostitutivi**: È TASSATIVAMENTE VIETATO usare volume mount di codice sorgente locale (`./jules_mcp.py:/app/...`) in produzione. Ogni modifica del codice deve essere committata su GitHub e distribuita tramite `docker compose pull` dell'immagine GHCR precompilata.
+# Knowledge & Utilities:
+python3 /home/federico/jules/curator.py knowledge --repo RoosterLab --mode bolt
+python3 /home/federico/jules/curator.py list      # Show all registered target projects
+python3 /home/federico/jules/curator.py status    # Show active worktrees
+python3 /home/federico/jules/curator.py cleanup   # Prune and remove stale worktrees
+```

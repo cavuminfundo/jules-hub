@@ -1,183 +1,88 @@
-# Jules MCP Server
+# Jules Hub
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![FastMCP](https://img.shields.io/badge/FastMCP-0.2.0-green.svg)](https://github.com/jlowin/fastmcp)
-[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/cavuminfundo/jules-mcp-server/pkgs/container/jules-mcp-server)
+[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/release/python-3110/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.95.0-blue.svg)](https://fastapi.tiangolo.com/)
+[![React 19](https://img.shields.io/badge/React-19-blue.svg)](https://reactjs.org/)
+[![Tailwind Dark UI](https://img.shields.io/badge/Tailwind-Dark%20UI-blue.svg)](https://tailwindcss.com/)
+[![Docker GHCR](https://img.shields.io/badge/Docker-GHCR-blue.svg)](https://github.com/orgs/cavuminfundo/packages)
 
-Production-grade [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for [Google Jules AI](https://jules.google.com), built with [FastMCP](https://github.com/jlowin/fastmcp).
+## Overview
 
-Provides an enterprise-ready bridge for AI Agents (Antigravity, Claude Desktop, Cursor, VS Code, Goose) to inspect, mentor, plan, and automate Google Jules execution sessions natively via HTTP, SSE, or Stdio transport.
+Jules Hub is an autonomous Junior AI Coder Runner and Tech Lead Cockpit designed to streamline the development process. It follows the Junior/Senior Coder pattern, where Junior personas (Bolt, Palette, Sentinel) execute isolated worktree tasks under 50 lines of code. The Senior Tech Lead supervises, reviews diffs, approves/discards changes, or escalates to the Antigravity IDE via the Chrome DevTools Protocol (CDP) Bridge on port 9000.
 
----
+## Architecture and Core Components
 
-## Key Features
+### Hub Components
 
-- ⚡ **Sub-Second Response Times**: Single-page fast listing (`fetch_all=False` by default) returning session data in <200ms.
-- 🛡️ **Hardened Network Resilience**: Per-request isolated HTTP clients (`httpx.AsyncClient`) with strict timeouts (`httpx.Timeout(8.0)`) catching `asyncio.CancelledError` and `TimeoutError` to guarantee non-blocking agent turns.
-- 🧹 **Concurrent Automatic Session Cleanup**: Parallel scanning and deletion of terminal/inactive sessions (`COMPLETED`, `FINISHED`, `TERMINATED`, `CANCELLED`, `FAILED`, `EXPIRED`, `CLOSED`) using `asyncio.gather` (`clean_completed_sessions`).
-- 🔒 **Type Sanitization**: Primitive string and boolean defaults (`title: ""`, `starting_branch: "main"`, `fetch_all: false`) eliminating `null` validation errors in client schema parsers.
-- 🔌 **Multi-Transport Support**: Native HTTP JSON-RPC (`/mcp`), Server-Sent Events (`/sse`), and Stdio bridge support.
-- 🐳 **Production Docker Image**: Pre-compiled multi-arch image hosted on GitHub Container Registry (`ghcr.io/cavuminfundo/jules-mcp-server:latest`).
+- **hub/scanner.py**: Discovers registered repositories.
+- **hub/worktree_manager.py**: Manages zero-dirty git worktrees in `/home/federico/jules/worktrees/<repo>-<mode>`.
+- **hub/engine_router.py**: Routes tasks to different engines:
+  - **Flash**: Cloud Gemini Flash.
+  - **Local**: Local Ollama RTX 5070 Ti (`http://localhost:11434`).
+  - **Hybrid**: Local pre-screening + Cloud execution with fallback.
+- **hub/cdp_bridge.py**: Handles Chrome DevTools Protocol (CDP) bridge for 1-click escalation to Antigravity Senior Coder.
+- **hub/app.py**: FastAPI backend on port 4100, serving Server-Sent Events (`/api/events`) for real-time telemetry.
 
----
+### UI Components
 
-## 🛠️ MCP Tools Reference
+- **ui/**: React + Vite + Tailwind Dark Cockpit served on port 4100.
 
-| Tool Name | Description | Default Parameters |
-| --- | --- | --- |
-| `list_sessions` | List Jules sessions with fast single-page default or optional auto-pagination. | `page_size: 50`, `page_token: ""`, `fetch_all: false` |
-| `get_session` | Retrieve full details and current state for a specific session ID or name. | `session_id: string` |
-| `create_session` | Launch a new Jules AI session for a target repository. | `source: string`, `prompt: string`, `title: ""`, `starting_branch: "main"`, `require_plan_approval: false` |
-| `list_activities` | Fetch activity history and generated plans for a session. | `session_id: string`, `page_size: 20`, `page_token: ""` |
-| `list_all_activities` | Fetch all activity history for a session using automatic pagination. | `session_id: string` |
-| `get_activity` | Retrieve details for a specific activity ID within a session. | `session_id: string`, `activity_id: string` |
-| `approve_session_plan` | Approve a pending session plan in a single native call. | `session_id: string` |
-| `send_session_message` | Send mentoring feedback, answers, or directives to an active session. | `session_id: string`, `message: string` |
-| `delete_session` | Permanently delete a completed or inactive session. | `session_id: string` |
-| `clean_completed_sessions` | Concurrently scan and delete all terminal/inactive sessions. | *None* |
-| `list_sources` | List accessible source GitHub repositories connected to Jules. | `page_size: 50`, `page_token: ""`, `filter_str: ""` |
-| `get_all_sources` | Retrieve all accessible source repositories with auto-pagination. | `filter_str: ""` |
+### CLI Entry Point
 
----
+- **curator.py**: Provides CLI commands for `run`, `fix-ci`, `knowledge`, `list`, `status`, and `cleanup`.
 
-## 🚀 Quickstart & Container Deployment
+## Quickstart and Docker Deployment
 
-### 1. Docker Compose (Recommended Production Setup)
+To deploy Jules Hub using Docker, follow these steps:
 
-Create a `docker-compose.yml` file:
+1. **Create a `compose.yaml` file**:
 
-```yaml
-services:
-  jules-mcp:
-    image: ghcr.io/cavuminfundo/jules-mcp-server:latest
-    container_name: jules_mcp_server
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    environment:
-      - JULES_API_KEY=your_google_jules_api_key_here
-    ports:
-      - "8000:8000"
-    restart: unless-stopped
-```
+    ```yaml
+    version: '3.8'
 
-Run the container:
-```bash
-docker compose up -d
-```
+    services:
+      jules-hub:
+        image: ghcr.io/cavuminfundo/jules-hub:latest
+        network_mode: host
+        environment:
+          - PORT=4100
+          - CDP_PORT=9000
+          - OLLAMA_HOST=http://localhost:11434
+    ```
 
-### 2. Standalone Docker Run
+2. **Run the Docker Compose command**:
 
-```bash
-docker run -d \
-  --name jules_mcp_server \
-  -e JULES_API_KEY="your_google_jules_api_key_here" \
-  -p 8000:8000 \
-  --restart unless-stopped \
-  ghcr.io/cavuminfundo/jules-mcp-server:latest
-```
+    ```bash
+    docker-compose up -d
+    ```
 
----
+## Local Development and Testing
 
-## 🔌 Client Integration Guide (`mcp_config.json`)
+For local development and testing, use the following commands:
 
-Add `jules-mcp` to your AI client configuration (Antigravity, Claude Desktop, Cursor, VS Code, Goose).
+1. **Sync dependencies**:
 
-### Option A: Stateless HTTP JSON-RPC Transport (Recommended - Zero Session State)
+    ```bash
+    uv sync
+    ```
 
-Stateless endpoint (`/rpc`) executing tool calls instantly without stateful SSE connection ID caching or reconnection timeouts:
+2. **Run tests**:
 
-```json
-{
-  "mcpServers": {
-    "jules-mcp": {
-      "type": "http",
-      "url": "http://<SERVER_IP_OR_HOST>:8000/rpc"
-    }
-  }
-}
-```
+    ```bash
+    uv run pytest tests/ -q
+    ```
 
-### Option B: Native Stdio Transport Bridge (SSH / Docker)
+3. **Start the FastAPI backend**:
 
-Direct process stdio stream execution bypassing HTTP network sockets completely:
+    ```bash
+    uv run uvicorn hub.app:app --host 0.0.0.0 --port 4100
+    ```
 
-```json
-{
-  "mcpServers": {
-    "jules-mcp": {
-      "command": "ssh",
-      "args": [
-        "-o",
-        "StrictHostKeyChecking=no",
-        "user@<SERVER_IP_OR_HOST>",
-        "docker",
-        "exec",
-        "-i",
-        "jules_mcp_server",
-        "python3",
-        "-m",
-        "jules_mcp.jules_mcp",
-        "stdio"
-      ]
-    }
-  }
-}
-```
+## License
 
-### Option C: SSE Transport (Server-Sent Events)
-
-Stateful stream connection for streaming clients:
-
-```json
-{
-  "mcpServers": {
-    "jules-mcp": {
-      "type": "sse",
-      "url": "http://<SERVER_IP_OR_HOST>:8000/sse"
-    }
-  }
-}
-```
-
-### Stdio Transport Bridge (`mcp-remote`)
-
-```json
-{
-  "mcpServers": {
-    "jules-mcp": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "http://<SERVER_IP_OR_HOST>:8000/sse",
-        "--allow-http"
-      ]
-    }
-  }
-}
-```
+Jules Hub is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
 ---
 
-## 🛠️ Local Development & Testing
-
-```bash
-# Clone the repo
-git clone https://github.com/cavuminfundo/jules-mcp-server.git
-cd jules-mcp-server
-
-# Set environment API key
-export JULES_API_KEY="your_google_jules_api_key"
-
-# Install dependencies and start server with uv
-uv sync
-uv run python -m jules_mcp.jules_mcp
-```
-
----
-
-## 📄 License
-
-Distributed under the [MIT License](LICENSE). See `LICENSE` for more information.
+**Note**: Ensure that all dependencies and configurations are correctly set up before running the application.

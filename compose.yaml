@@ -1,0 +1,13 @@
+services:
+  jules-hub:
+    image: ghcr.io/cavuminfundo/jules-hub:latest
+    container_name: jules-hub
+    restart: unless-stopped
+    network_mode: host
+    user: "1000:1000"
+    environment:
+      - PORT=4100
+      - CDP_PORT=9000
+      - OLLAMA_HOST=http://localhost:11434
+    volumes:
+      - /home/federico:/home/federico:rw

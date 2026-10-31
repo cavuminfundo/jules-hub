@@ -1,15 +1,57 @@
+# Stage 1: Build Frontend UI
+FROM node:20-alpine AS ui-builder
+
+USER root
+ENV NODE_ENV=development
+WORKDIR /app/ui
+
+# Install dependencies including devDependencies for build
+COPY ui/package.json ui/package-lock.json* ./
+RUN npm install --include=dev
+
+# Copy source and config files
+COPY ui/src/ ./src/
+COPY ui/index.html ui/vite.config.ts ui/tsconfig*.json ui/tailwind.config.js ui/postcss.config.js ./
+
+# Compile production bundle into /app/ui/dist
+RUN npm run build
+
+# Stage 2: Python runtime
 FROM python:3.12-slim
+
+# Install git and uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+ && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user federico (UID 1000, GID 1000)
+RUN groupadd -g 1000 federico && \
+    useradd -u 1000 -g 1000 -m -s /bin/bash federico
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir fastmcp httpx pydantic
+# Copy dependency metadata and application source
+COPY pyproject.toml README.md ./
+COPY hub/ ./hub/
+COPY curator.py ./
 
-COPY jules_mcp ./jules_mcp
+# Install python dependencies via uv
+RUN uv pip install --system -e .
 
-EXPOSE 8000
+# Copy UI build artifacts from Stage 1
+COPY --from=ui-builder /app/ui/dist ./ui/dist
 
-ENV PYTHONUNBUFFERED=1
+# Set ownership of /app to federico
+RUN chown -R 1000:1000 /app
 
-LABEL org.opencontainers.image.source=https://github.com/cavuminfundo/jules-mcp-server
+# Configure safe git directory for host volume mounts
+RUN git config --system --add safe.directory "*"
 
-CMD ["python", "-m", "jules_mcp.jules_mcp"]
+# Configure non-root environment and user
+ENV PATH="/home/federico/.local/bin:${PATH}"
+USER 1000:1000
+
+EXPOSE 4100
+
+ENTRYPOINT ["uvicorn", "hub.app:app", "--host", "0.0.0.0", "--port", "4100"]

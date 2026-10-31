@@ -1,3 +1,0 @@
-🎯 **What:** The vulnerability fixed was exposing upstream raw response text in standard API request errors (e.g. `res.text`), which allows potential internal infrastructure or logic data to leak to the client.
-⚠️ **Risk:** The potential impact if left unfixed could expose internal paths, error messages from Google endpoints, internal stack traces, or auth statuses to end users consuming this MCP, which aids attackers in footprinting the target.
-🛡️ **Solution:** The fix replaces the verbose response text inclusion with a generic status code reporting mechanism in `_make_api_request`, standardizing error logging and eliminating the leakage pathway.

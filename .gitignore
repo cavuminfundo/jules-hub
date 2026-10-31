@@ -1,0 +1,20 @@
+# Worktrees isolated runner
+worktrees/
+.worktrees/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Syncthing
+.stfolder/
+.stignore
+
+# Antigravity & OS
+.DS_Store
+*.log
+node_modules/
+dist/
+.codegraph/

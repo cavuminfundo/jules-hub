@@ -1,5 +1,5 @@
 """
-Jules Hub Scanner: Repository inspection and issue suggestion engine.
+Julius Hub Scanner: Repository inspection and issue suggestion engine.
 Extracts micro-improvements across Bolt (Performance), Palette (UX/Hygiene),
 and Sentinel (Security) personas, as well as CI failure tracebacks.
 
@@ -182,7 +182,7 @@ def find_suggestions(
                                 raw_suggestions.append({
                                     "id": f"palette-{len(raw_suggestions)+1}",
                                     "persona": "palette",
-                                    "category": "hygiene",
+                                    "category": "cleanup",
                                     "title": "Icon-only button missing aria-label",
                                     "file": str(rel_path),
                                     "line": idx,
@@ -196,7 +196,7 @@ def find_suggestions(
                                 raw_suggestions.append({
                                     "id": f"palette-{len(raw_suggestions)+1}",
                                     "persona": "palette",
-                                    "category": "hygiene",
+                                    "category": "code_health",
                                     "title": f"Remove empty pass block in {file_path.stem}",
                                     "file": str(rel_path),
                                     "line": idx,
@@ -281,7 +281,7 @@ def find_suggestions(
                             raw_suggestions.append({
                                 "id": f"craftsman-{len(raw_suggestions)+1}",
                                 "persona": "palette",
-                                "category": "tests",
+                                "category": "testing",
                                 "title": f"Missing test file for {src_file.name}",
                                 "file": str(rel_src),
                                 "line": 1,
@@ -292,7 +292,17 @@ def find_suggestions(
 
     if category != "all":
         cat_clean = category.lower()
-        raw_suggestions = [s for s in raw_suggestions if s.get("category") == cat_clean]
+        category_aliases = {
+            "hygiene": {"cleanup", "code_health", "hygiene"},
+            "cleanup": {"cleanup", "hygiene"},
+            "code_health": {"code_health", "hygiene"},
+            "tests": {"testing", "tests"},
+            "testing": {"testing", "tests"},
+            "security": {"security"},
+            "performance": {"performance"},
+        }
+        allowed = category_aliases.get(cat_clean, {cat_clean})
+        raw_suggestions = [s for s in raw_suggestions if s.get("category") in allowed]
 
     ignored = set(ignored_ids) if ignored_ids else set()
     suggestions = [Suggestion(**s) for s in raw_suggestions]
@@ -371,8 +381,9 @@ def fetch_ci_failure_log(
         raw_log = log_res.stdout.strip()
 
         if len(raw_log) > 20000:
-            offload_script = Path("/home/federico/skills_library/scripts/local_llm_offload.py")
-            if offload_script.exists():
+            offload_script_env = os.getenv("LOCAL_LLM_OFFLOAD_SCRIPT", "")
+            if offload_script_env and Path(offload_script_env).exists():
+                offload_script = Path(offload_script_env)
                 condense_cmd = [
                     sys.executable,
                     str(offload_script),

@@ -1,0 +1,262 @@
+{
+  "pyproject.toml": {
+    "mtime": 1793466136.6345189,
+    "ast_hash": "9e72124b98bab40f9b2be965a5766a32",
+    "semantic_hash": ""
+  },
+  "curator.py": {
+    "mtime": 1793443828.4614043,
+    "ast_hash": "8708edb9ef15f35d11f4476761b6b92d",
+    "semantic_hash": ""
+  },
+  "tests/test_curator.py": {
+    "mtime": 1793443877.947367,
+    "ast_hash": "697037ba00138c17ec2b57746320527d",
+    "semantic_hash": ""
+  },
+  ".agents/AGENTS.md": {
+    "mtime": 1793442731.0672107,
+    "ast_hash": "c111bcb7d8e2065735ce30dfc4a40fba",
+    "semantic_hash": ""
+  },
+  ".agents/memory/lessons.md": {
+    "mtime": 1785231996.0928223,
+    "ast_hash": "4e5e70dfef18bf4fb2c69e088f88a08d",
+    "semantic_hash": ""
+  },
+  ".github/workflows/docker-publish.yml": {
+    "mtime": 1793465106.0133448,
+    "ast_hash": "cd1e15bacb4af23d8187920316a77203",
+    "semantic_hash": ""
+  },
+  "CONTRIBUTING.md": {
+    "mtime": 1785230800.5518987,
+    "ast_hash": "6c4921fb6d7ad04e093a37eb1b6a8517",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1793468108.6593819,
+    "ast_hash": "c994d18c6927bbc8231b3e7f08a9cbb3",
+    "semantic_hash": ""
+  },
+  "journal/bolt.md": {
+    "mtime": 1793441227.1917799,
+    "ast_hash": "61b2bce9c1c361f6f2c60cb55d73858b",
+    "semantic_hash": ""
+  },
+  "journal/palette.md": {
+    "mtime": 1793441251.8227167,
+    "ast_hash": "5efd7519e8e89b195f83872de4211e31",
+    "semantic_hash": ""
+  },
+  "journal/sentinel.md": {
+    "mtime": 1793441255.0547085,
+    "ast_hash": "d220382fbeac6b1601c866843e9dc0db",
+    "semantic_hash": ""
+  },
+  "hub/__init__.py": {
+    "mtime": 1793462642.9029536,
+    "ast_hash": "289e8cc57644d6217cf582a2214a939f",
+    "semantic_hash": ""
+  },
+  "hub/app.py": {
+    "mtime": 1793473452.7470636,
+    "ast_hash": "5d9c837bfa373d22d3a6434181720626",
+    "semantic_hash": ""
+  },
+  "hub/cdp_bridge.py": {
+    "mtime": 1793473266.4864113,
+    "ast_hash": "ba03a6f3d443fc75fe02f058a8c09f1d",
+    "semantic_hash": ""
+  },
+  "hub/engine_router.py": {
+    "mtime": 1793473293.6441922,
+    "ast_hash": "071c9981ef18bac55ce50967ce081b42",
+    "semantic_hash": ""
+  },
+  "hub/models.py": {
+    "mtime": 1793473200.761979,
+    "ast_hash": "f85006807b051e935659222abcd80444",
+    "semantic_hash": ""
+  },
+  "hub/scanner.py": {
+    "mtime": 1793473330.8399055,
+    "ast_hash": "cb698b901d965f2254d641dfbea4a511",
+    "semantic_hash": ""
+  },
+  "hub/worktree_manager.py": {
+    "mtime": 1793462788.9200919,
+    "ast_hash": "d6702d423fe8c574d61d925c9eb9fb0c",
+    "semantic_hash": ""
+  },
+  "tests/test_api.py": {
+    "mtime": 1793464347.1044645,
+    "ast_hash": "d743332fd28a47e40f8535673a5da356",
+    "semantic_hash": ""
+  },
+  "tests/test_cdp_bridge.py": {
+    "mtime": 1793464190.612521,
+    "ast_hash": "cfaa4ae01875fae84570a066af646c9c",
+    "semantic_hash": ""
+  },
+  "tests/test_engine_router.py": {
+    "mtime": 1793463735.2373579,
+    "ast_hash": "c37c5dbd9eecb4a3d4c46ac867326a7b",
+    "semantic_hash": ""
+  },
+  "tests/test_scanner.py": {
+    "mtime": 1793462835.391695,
+    "ast_hash": "8c2523c18ae9002ab8dd832636c3a5db",
+    "semantic_hash": ""
+  },
+  "tests/test_worktree_manager.py": {
+    "mtime": 1793462815.5224445,
+    "ast_hash": "47f5a948a22f80a390ee9c7945f94d24",
+    "semantic_hash": ""
+  },
+  "ui/package.json": {
+    "mtime": 1793464451.1474078,
+    "ast_hash": "78457a85380e990bc52c25e9a0a64616",
+    "semantic_hash": ""
+  },
+  "ui/postcss.config.js": {
+    "mtime": 1793464474.6913931,
+    "ast_hash": "ef3ba2a81ba19f8ea5ddf625521e96f0",
+    "semantic_hash": ""
+  },
+  "ui/src/App.tsx": {
+    "mtime": 1793473439.438149,
+    "ast_hash": "a398761c97904d7756bc72f476392695",
+    "semantic_hash": ""
+  },
+  "ui/src/api.ts": {
+    "mtime": 1793473209.2779024,
+    "ast_hash": "c204736342cfcd218ce042eb4a503305",
+    "semantic_hash": ""
+  },
+  "ui/src/components/DiffDrawer.tsx": {
+    "mtime": 1793473305.0711024,
+    "ast_hash": "36117cc7984fbae1a9a56df782296e58",
+    "semantic_hash": ""
+  },
+  "ui/src/components/RepoSelector.tsx": {
+    "mtime": 1793464527.0673583,
+    "ast_hash": "52b6e50167c34f85914cf58c598d0bf2",
+    "semantic_hash": ""
+  },
+  "ui/src/components/SuggestionCard.tsx": {
+    "mtime": 1793473232.6926963,
+    "ast_hash": "1a4735750fb93cc1e8bcc99a36a72699",
+    "semantic_hash": ""
+  },
+  "ui/src/components/Toast.tsx": {
+    "mtime": 1793464599.458306,
+    "ast_hash": "283866d2ea1dda4b4da5c1bcbea8250b",
+    "semantic_hash": ""
+  },
+  "ui/src/components/WorktreeList.tsx": {
+    "mtime": 1793464591.599312,
+    "ast_hash": "7a55c6aeab13b0dd6f85d883aa0fd64e",
+    "semantic_hash": ""
+  },
+  "ui/src/main.tsx": {
+    "mtime": 1793464640.4162745,
+    "ast_hash": "aa122bdcf833a2c00fdf9ca8e5348675",
+    "semantic_hash": ""
+  },
+  "ui/src/types.ts": {
+    "mtime": 1793473183.4091384,
+    "ast_hash": "93c1b90a6fd7fe67aab3915dce893ff9",
+    "semantic_hash": ""
+  },
+  "ui/tailwind.config.js": {
+    "mtime": 1793464471.582395,
+    "ast_hash": "b1c13d57bbb635138ce26fafc22ed451",
+    "semantic_hash": ""
+  },
+  "ui/tsconfig.json": {
+    "mtime": 1793464463.8034,
+    "ast_hash": "04341c964827c15769c958e3ba815a6c",
+    "semantic_hash": ""
+  },
+  "ui/tsconfig.node.json": {
+    "mtime": 1793464466.6283982,
+    "ast_hash": "767b2e9abe6452170cdc399ca052cfbc",
+    "semantic_hash": ""
+  },
+  "ui/vite.config.ts": {
+    "mtime": 1793464459.7884023,
+    "ast_hash": "b7dd98134be121dfe88b6d3b9ae82e8c",
+    "semantic_hash": ""
+  },
+  "compose.yaml": {
+    "mtime": 1793465101.557355,
+    "ast_hash": "823e537cde8c4aa35e4da9ffa2444595",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-10-31-jules-hub.md": {
+    "mtime": 1793461725.2799962,
+    "ast_hash": "00dfa5342329cbea0c584c2fc35092be",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-10-31-jules-hub-architecture-design.md": {
+    "mtime": 1793460858.3684757,
+    "ast_hash": "8469b58d02a8a02a36430276acede6a4",
+    "semantic_hash": ""
+  },
+  "ui/index.html": {
+    "mtime": 1793464480.1233897,
+    "ast_hash": "ead6b5b41dc91599ddc8c592b9983741",
+    "semantic_hash": ""
+  },
+  "data/hub_state.json": {
+    "mtime": 1793473553.905559,
+    "ast_hash": "99498c5ce27c853f38dd705f4c2b7177",
+    "semantic_hash": ""
+  },
+  "hub/config_store.py": {
+    "mtime": 1793473217.4248297,
+    "ast_hash": "3c434c4eb73fac8eae79fb94c9512a95",
+    "semantic_hash": ""
+  },
+  "hub/scheduler.py": {
+    "mtime": 1793473346.7747874,
+    "ast_hash": "4ec7fa9b503c5b90868d2b5bf9a2b89a",
+    "semantic_hash": ""
+  },
+  "tests/test_config_store.py": {
+    "mtime": 1793473228.588732,
+    "ast_hash": "c1b655e0540413909cfb998a44bd659f",
+    "semantic_hash": ""
+  },
+  "tests/test_scheduler_and_senior.py": {
+    "mtime": 1793473484.2648673,
+    "ast_hash": "b5a59e906603a5c13069fdf786fc74cd",
+    "semantic_hash": ""
+  },
+  "ui/src/components/SchedulerPanel.tsx": {
+    "mtime": 1793473395.7574399,
+    "ast_hash": "a82d0af0d346dd1c84b2834c01a11e21",
+    "semantic_hash": ""
+  },
+  "ui/src/components/SettingsView.tsx": {
+    "mtime": 1793473465.671982,
+    "ast_hash": "537a3082af725b7cef57a60781e7d063",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-10-31-jules-hub-v2-autonomous-cockpit.md": {
+    "mtime": 1793471461.0371165,
+    "ast_hash": "4aa5bca27fa4d6acae65c78b37418da0",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-10-31-jules-hub-v2-autonomous-cockpit-design.md": {
+    "mtime": 1793470369.776515,
+    "ast_hash": "8c45be2448e45311ca5d0aa8ecf2eabc",
+    "semantic_hash": ""
+  },
+  "data/hub_config.json": {
+    "mtime": 1793474745.5111134,
+    "ast_hash": "7bce3d127cb2afd8c705bf1f408a84ff",
+    "semantic_hash": ""
+  }
+}

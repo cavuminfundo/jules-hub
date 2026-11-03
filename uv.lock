@@ -142,7 +142,7 @@ wheels = [
 ]
 
 [[package]]
-name = "jules-hub"
+name = "julius-hub"
 version = "0.2.1"
 source = { editable = "." }
 dependencies = [

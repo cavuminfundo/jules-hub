@@ -25,16 +25,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
  && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user federico (UID 1000, GID 1000)
-RUN groupadd -g 1000 federico && \
-    useradd -u 1000 -g 1000 -m -s /bin/bash federico
+# Create non-root user julius (UID 1000, GID 1000)
+RUN groupadd -g 1000 julius && \
+    useradd -u 1000 -g 1000 -m -s /bin/bash julius
 
 WORKDIR /app
 
 # Copy dependency metadata and application source
 COPY pyproject.toml README.md ./
 COPY hub/ ./hub/
-COPY curator.py ./
 
 # Install python dependencies via uv
 RUN uv pip install --system -e .
@@ -42,14 +41,14 @@ RUN uv pip install --system -e .
 # Copy UI build artifacts from Stage 1
 COPY --from=ui-builder /app/ui/dist ./ui/dist
 
-# Set ownership of /app to federico
+# Set ownership of /app to julius
 RUN chown -R 1000:1000 /app
 
 # Configure safe git directory for host volume mounts
 RUN git config --system --add safe.directory "*"
 
 # Configure non-root environment and user
-ENV PATH="/home/federico/.local/bin:${PATH}"
+ENV PATH="/home/julius/.local/bin:${PATH}"
 USER 1000:1000
 
 EXPOSE 4100

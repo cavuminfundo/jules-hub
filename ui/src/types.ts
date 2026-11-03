@@ -40,6 +40,7 @@ export interface WorktreeSessionInfo {
 export interface RunRequest {
   repo: string;
   persona?: string;
+  prompt?: string | null;
   target_file?: string | null;
   issue_context?: string | null;
   mode?: EngineMode;
@@ -52,6 +53,7 @@ export interface RunResponse {
   status: TaskStatus;
   worktree_path?: string | null;
   branch?: string | null;
+  diff?: string | null;
   message: string;
 }
 
@@ -151,6 +153,43 @@ export interface RepoScheduleConfig {
   next_run_at?: string | null;
 }
 
+export type GitAuthoringMode = 'co_authored' | 'julius_only' | 'user_only';
+
+export interface CommunitySettings {
+  default_model: string;
+  auto_find_issues: boolean;
+  export_as_pr: boolean;
+  git_commit_authoring: GitAuthoringMode;
+  only_respond_to_mentions: boolean;
+  open_pr_as_draft: boolean;
+  cdp_url: string;
+  workspaces_root: string;
+  github_token_masked?: string | null;
+  cloud_api_key_masked?: string | null;
+  has_github_token: boolean;
+  has_cloud_api_key: boolean;
+}
+
+export interface SecretsUpdateRequest {
+  github_token?: string | null;
+  gemini_api_key?: string | null;
+  openai_api_key?: string | null;
+}
+
+export interface SessionRecord {
+  task_id: string;
+  repo: string;
+  title: string;
+  prompt?: string | null;
+  persona: string;
+  status: TaskStatus;
+  branch?: string | null;
+  worktree_path?: string | null;
+  diff?: string | null;
+  pr_url?: string | null;
+  created_at: string;
+}
+
 export interface HubConfig {
   ollama_instances: OllamaInstance[];
   junior_config: RoleModelConfig;
@@ -160,6 +199,7 @@ export interface HubConfig {
   cdp_port: number;
   max_diff_lines: number;
   repo_schedules: RepoScheduleConfig[];
+  settings?: CommunitySettings;
 }
 
 export interface SeniorReviewResult {

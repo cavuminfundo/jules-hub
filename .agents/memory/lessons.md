@@ -38,3 +38,6 @@ This file serves as a memory bank to record past execution mistakes, lessons lea
 - **Issue**: I client MCP (come Antigravity) possono mantenere in memoria un `session_id` SSE vecchio dopo il riavvio del container Docker, ricevendo 404 ed impallando l'interfaccia.
 - **Root Cause**: Le connessioni SSE sono stateful (con stato e con ID di sessione temporaneo del tubo di trasporto).
 - **Checklist/Rule**: Prediligere sempre configurazioni **Stateless HTTP (`/rpc`)** o **Stdio** in `mcp_config.json`. Il trasporto stateless non utilizza ID di sessione di connessione, garantendo risposte 200 OK istantanee (< 0.5s) e zero stalli per l'utente. Quando si testano comandi da agente, usare SEMPRE `timeout 5` per forzare la chiusura rapida.
+
+### Lezione Aggiornata
+- **Rebranding Julius Hub**: Mantenere sempre un `field_validator` Pydantic retrocompatibile (`jules_only -> julius_only`) e il fallback per le variabili d'ambiente `JULIUS_* -> JULES_*` e per il nome cartella locale `'jules'` quando si rinomina il repo GitHub senza spostare il workspace Syncthing.

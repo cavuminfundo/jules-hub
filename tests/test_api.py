@@ -1,5 +1,5 @@
 """
-Unit tests for Jules Hub FastAPI Server (hub/app.py).
+Unit tests for Julius Hub FastAPI Server (hub/app.py).
 Tests REST endpoints (/api/health, /api/projects, /api/suggestions, /api/run,
 /api/escalate, /api/worktrees, /api/worktrees/prune), SSE stream (/api/stream/{task_id}),
 CORS, and conditional static UI mounting with SPA fallback.
@@ -98,7 +98,7 @@ def test_api_health(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
-    assert data["service"] == "jules-hub"
+    assert data["service"] == "julius-hub"
     assert "version" in data
 
 
@@ -185,7 +185,7 @@ def test_api_escalate_success(client, mock_cdp_bridge):
     """Verify /api/escalate invokes CDPBridge and returns 200."""
     payload = {
         "repo": "jules-hub",
-        "worktree_path": "/home/federico/jules/worktrees/wt-1",
+        "worktree_path": "/workspaces/worktrees/wt-1",
         "branch": "curator/bolt-1",
         "diff_summary": "Fix async loop",
         "test_status": "PASSED",
@@ -208,7 +208,7 @@ def test_api_escalate_port_closed_resilience(client, mock_cdp_bridge):
     )
     payload = {
         "repo": "jules-hub",
-        "worktree_path": "/home/federico/jules/worktrees/wt-1",
+        "worktree_path": "/workspaces/worktrees/wt-1",
         "branch": "curator/bolt-1",
         "diff_summary": "Fix async loop",
         "test_status": "PASSED",
@@ -349,7 +349,7 @@ def test_conditional_ui_mount_not_built(tmp_path):
     assert resp.status_code == 200
     data = resp.json()
     assert data["ui"] == "not_built"
-    assert data["service"] == "jules-hub"
+    assert data["service"] == "julius-hub"
 
 
 def test_conditional_ui_mount_built(tmp_path):
@@ -400,3 +400,118 @@ def test_cors_middleware(client):
     )
     assert resp.status_code == 200
     assert resp.headers.get("access-control-allow-origin") in ("*", "http://localhost:5173")
+
+
+def test_api_sessions_and_tasks(client, tmp_path):
+    """Verify /api/sessions and /api/tasks/{task_id} endpoints."""
+    # 1. Run dry_run task to create a session record
+    run_resp = client.post("/api/run", json={"repo": "test-repo", "persona": "bolt", "dry_run": True})
+    assert run_resp.status_code == 200
+    task_id = run_resp.json()["task_id"]
+
+    # 2. Get sessions list
+    sessions_resp = client.get("/api/sessions")
+    assert sessions_resp.status_code == 200
+    sessions = sessions_resp.json()
+    assert len(sessions) >= 1
+    assert any(s["task_id"] == task_id for s in sessions)
+
+    # Filter by repo
+    repo_sessions_resp = client.get("/api/sessions?repo=test-repo")
+    assert repo_sessions_resp.status_code == 200
+    assert all(s["repo"] == "test-repo" for s in repo_sessions_resp.json())
+
+    # 3. Get task detail
+    detail_resp = client.get(f"/api/tasks/{task_id}")
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["task_id"] == task_id
+    assert detail["session"] is not None
+    assert detail["session"]["status"] == "passed"
+
+    # 4. Unknown task returns 404
+    nf_resp = client.get("/api/tasks/nonexistent_task_xyz")
+    assert nf_resp.status_code == 404
+
+
+def test_api_settings_secrets_and_config(client):
+    """Verify /api/settings/secrets updates tokens and masks them in /api/config."""
+    secrets_payload = {
+        "github_token": "ghp_securetoken99999",
+        "gemini_api_key": "AIzaSy_fake_api_key_888",
+    }
+    sec_resp = client.post("/api/settings/secrets", json=secrets_payload)
+    assert sec_resp.status_code == 200
+    sec_data = sec_resp.json()
+    assert sec_data["has_github_token"] is True
+    assert sec_data["github_token_masked"] == "ghp_...9999"
+    assert sec_data["has_cloud_api_key"] is True
+    assert "AIza..._888" in sec_data["cloud_api_key_masked"]
+
+    # Verify GET /api/config does not expose plaintext secrets
+    cfg_resp = client.get("/api/config")
+    assert cfg_resp.status_code == 200
+    cfg_json = cfg_resp.text
+    assert "ghp_securetoken99999" not in cfg_json
+    assert "AIzaSy_fake_api_key_888" not in cfg_json
+
+
+def test_api_freeform_prompt_run(client, mock_worktree_manager, mock_engine_router, tmp_path):
+    """Verify free-form prompt execution without target_file."""
+    wt_mock_path = tmp_path / "mock_wt_freeform"
+    wt_mock_path.mkdir(parents=True, exist_ok=True)
+
+    class MockContext:
+        def __init__(self):
+            self.worktree_path = wt_mock_path
+            self.branch = "curator/bolt-freeform"
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def mark_success(self):
+            pass
+
+    mock_worktree_manager.create_session.return_value = MockContext()
+    mock_engine_router.run_freeform_prompt = AsyncMock(
+        return_value=PatchResult(
+            success=True,
+            diff="--- a/free.py\n+++ b/free.py\n@@ -1 +1 @@\n-# fix",
+            lines_changed=1,
+            engine_used="antigravity_flash",
+        )
+    )
+
+    payload = {
+        "repo": "test-repo",
+        "persona": "bolt",
+        "prompt": "Fix unused import in free.py",
+        "dry_run": False,
+    }
+    resp = client.post("/api/run", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "passed"
+    assert data["diff"] is not None
+    assert "-# fix" in data["diff"]
+
+
+def test_spa_path_traversal_guard(tmp_path):
+    """Verify serve_spa_fallback rejects path traversal attempts."""
+    dist_dir = tmp_path / "ui_dist_sec"
+    dist_dir.mkdir(parents=True)
+    index_html = dist_dir / "index.html"
+    index_html.write_text("<html>App</html>", encoding="utf-8")
+
+    app = create_app(ui_dist_path=dist_dir)
+    test_client = TestClient(app)
+
+    # Path traversal attempt should not read files outside dist_dir
+    resp = test_client.get("/../../etc/passwd")
+    # Should either serve index.html or 404, never 500 or file outside
+    assert resp.status_code in (200, 404)
+    assert "root:x:" not in resp.text
+

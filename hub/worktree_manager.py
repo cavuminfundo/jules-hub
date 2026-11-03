@@ -1,5 +1,5 @@
 """
-Jules Hub Worktree Manager: Isolated git worktree lifecycle and test execution.
+Julius Hub Worktree Manager: Isolated git worktree lifecycle and test execution.
 Spawns 100% isolated git worktrees with unique timestamp/UUID naming, detects project test runners,
 enforces 120s test timeouts with process group kill (killpg), and automatically rolls back/prunes on abort.
 
@@ -22,8 +22,8 @@ from hub.models import WorktreeSessionInfo
 
 logger = logging.getLogger("hub.worktree_manager")
 
-DEFAULT_WORKTREES_DIR = Path("/home/federico/jules/worktrees")
-DEFAULT_REGISTRY_PATH = Path("/home/federico/.gemini/config/projects_registry.json")
+DEFAULT_WORKTREES_DIR = Path(os.getenv("JULIUS_WORKTREES_DIR") or os.getenv("JULES_WORKTREES_DIR") or Path.cwd() / "worktrees")
+DEFAULT_REGISTRY_PATH = Path(os.getenv("PROJECTS_REGISTRY_PATH", Path.cwd() / "data" / "projects_registry.json"))
 
 
 def run_cmd(
@@ -297,7 +297,7 @@ class WorktreeManager:
         worktrees_dir: Optional[Union[str, Path]] = None,
         registry_path: Optional[Union[str, Path]] = None,
     ):
-        env_worktrees = os.environ.get("JULES_WORKTREES_DIR")
+        env_worktrees = os.environ.get("JULIUS_WORKTREES_DIR") or os.environ.get("JULES_WORKTREES_DIR")
         if worktrees_dir is not None:
             self.worktrees_dir = Path(worktrees_dir).expanduser().resolve()
         elif env_worktrees:
@@ -313,18 +313,78 @@ class WorktreeManager:
         else:
             self.registry_path = DEFAULT_REGISTRY_PATH.resolve()
 
+    def _find_registry_path(self) -> Optional[Path]:
+        if self.registry_path.exists():
+            return self.registry_path
+        user_reg = Path("~/.gemini/config/projects_registry.json").expanduser().resolve()
+        if user_reg.exists():
+            return user_reg
+        try:
+            for home_reg in Path("/home").glob("*/.gemini/config/projects_registry.json"):
+                if home_reg.exists():
+                    return home_reg.resolve()
+        except Exception:
+            pass
+        return None
+
+    def _get_workspace_roots(self) -> List[Path]:
+        env_root = os.getenv("JULIUS_WORKSPACES_ROOT") or os.getenv("JULES_WORKSPACES_ROOT")
+        if env_root:
+            p = Path(env_root).expanduser().resolve()
+            return [p] if p.is_dir() else []
+
+        roots: List[Path] = []
+        if Path("/proc/mounts").exists():
+            try:
+                with open("/proc/mounts", "r", encoding="utf-8") as f:
+                    for line in f:
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            target = Path(parts[1]).resolve()
+                            if target.is_dir() and target != Path("/"):
+                                if target.parent == Path("/home") or target.parent.name == "home":
+                                    if target not in roots:
+                                        roots.append(target)
+            except Exception:
+                pass
+
+        if not roots:
+            for home_dir in Path("/home").glob("*"):
+                if home_dir.is_dir() and home_dir not in roots:
+                    roots.append(home_dir.resolve())
+
+        cwd_parent = Path.cwd().parent.resolve()
+        if cwd_parent.is_dir() and cwd_parent not in roots:
+            roots.append(cwd_parent)
+
+        return roots
+
     def resolve_repo_path(self, repo_query: Union[str, Path]) -> Path:
-        """Resolve project name or path against projects_registry.json or direct path."""
+        """Resolve project name or path against projects_registry.json, workspace roots, or direct path."""
         direct_path = Path(repo_query).expanduser().resolve()
         if direct_path.exists() and (direct_path / ".git").exists():
             return direct_path
 
-        if self.registry_path.exists():
+        query_lower = str(repo_query).lower()
+
+        for ws_root in self._get_workspace_roots():
+            if ws_root.is_dir():
+                direct_ws = (ws_root / repo_query).resolve()
+                if direct_ws.exists() and (direct_ws / ".git").exists():
+                    return direct_ws
+                try:
+                    for child in ws_root.iterdir():
+                        if child.is_dir() and (child.name.lower() == query_lower) and (child / ".git").exists():
+                            return child
+                except Exception:
+                    pass
+
+        registry_file = self._find_registry_path()
+        if registry_file and registry_file.exists():
             try:
-                with open(self.registry_path, "r", encoding="utf-8") as f:
+                with open(registry_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 projects = data.get("projects", []) if isinstance(data, dict) else data
-                query_lower = str(repo_query).lower()
                 for p in projects:
                     name = p.get("name", "").lower()
                     p_path = Path(p.get("path", "")).expanduser().resolve()
@@ -332,30 +392,60 @@ class WorktreeManager:
                         if p_path.exists() and (p_path / ".git").exists():
                             return p_path
             except Exception as e:
-                logger.warning("Error reading registry %s: %s", self.registry_path, e)
+                logger.warning("Error reading registry %s: %s", registry_file, e)
+
+        cwd = Path.cwd().resolve()
+        if (cwd / ".git").exists() and (cwd.name.lower() == query_lower or str(repo_query) in (".", "")):
+            return cwd
 
         raise ValueError(f"Could not resolve '{repo_query}' to an existing git repository.")
 
     def list_registered_projects(self) -> List[Dict[str, Any]]:
-        """Return all valid git repositories registered in projects_registry.json."""
+        """Return all valid git repositories registered in projects_registry.json or workspace roots."""
         results = []
-        if not self.registry_path.exists():
-            return results
+        seen_paths = set()
 
-        try:
-            with open(self.registry_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            projects = data.get("projects", []) if isinstance(data, dict) else data
-            for p in projects:
-                p_path = Path(p.get("path", "")).expanduser().resolve()
-                if p_path.exists() and (p_path / ".git").exists():
-                    results.append({
-                        "name": p.get("name", p_path.name),
-                        "path": str(p_path),
-                        "description": (p.get("description") or "")[:80],
-                    })
-        except Exception as e:
-            logger.warning("Error parsing projects from registry: %s", e)
+        registry_file = self._find_registry_path()
+        if registry_file and registry_file.exists():
+            try:
+                with open(registry_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                projects = data.get("projects", []) if isinstance(data, dict) else data
+                for p in projects:
+                    p_path = Path(p.get("path", "")).expanduser().resolve()
+                    if p_path.exists() and (p_path / ".git").exists():
+                        seen_paths.add(str(p_path))
+                        results.append({
+                            "name": p.get("name", p_path.name),
+                            "path": str(p_path),
+                            "description": (p.get("description") or "")[:80],
+                        })
+            except Exception as e:
+                logger.warning("Error parsing projects from registry: %s", e)
+
+        for ws_root in self._get_workspace_roots():
+            if ws_root.is_dir():
+                try:
+                    for child in ws_root.iterdir():
+                        if child.is_dir() and (child / ".git").exists() and str(child) not in seen_paths:
+                            seen_paths.add(str(child))
+                            results.append({
+                                "name": child.name,
+                                "path": str(child),
+                                "description": "Auto-discovered git workspace",
+                            })
+                except Exception as e:
+                    logger.debug("Error scanning workspace root %s: %s", ws_root, e)
+
+        if not results:
+            cwd = Path.cwd().resolve()
+            if (cwd / ".git").exists() and str(cwd) not in seen_paths:
+                results.append({
+                    "name": cwd.name,
+                    "path": str(cwd),
+                    "description": "Auto-discovered current repository",
+                })
+
         return results
 
     def create_session(

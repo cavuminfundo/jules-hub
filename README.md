@@ -1,4 +1,4 @@
-# Jules Hub
+# Julius Hub
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/release/python-3110/)
@@ -9,7 +9,7 @@
 
 ## Overview
 
-Jules Hub is an autonomous Junior AI Coder Runner and Tech Lead Cockpit designed to streamline the development process. It follows the Junior/Senior Coder pattern, where Junior personas (Bolt, Palette, Sentinel) execute isolated worktree tasks under 50 lines of code. The Senior Tech Lead supervises, reviews diffs, approves/discards changes, or escalates to the Antigravity IDE via the Chrome DevTools Protocol (CDP) Bridge on port 9000.
+Julius Hub is an autonomous Junior AI Coder Runner and Tech Lead Cockpit designed to streamline the development process. It follows the Junior/Senior Coder pattern, where Junior personas (Bolt, Palette, Sentinel) execute isolated worktree tasks under 50 lines of code. The Senior Tech Lead supervises, reviews diffs, approves/discards changes, or escalates to the Antigravity IDE via the Chrome DevTools Protocol (CDP) Bridge on port 9000.
 
 ## Architecture and Core Components
 
@@ -34,7 +34,7 @@ Jules Hub is an autonomous Junior AI Coder Runner and Tech Lead Cockpit designed
 
 ## Quickstart and Docker Deployment
 
-To deploy Jules Hub using Docker, follow these steps:
+To deploy Julius Hub using Docker, follow these steps:
 
 1. **Create a `compose.yaml` file**:
 
@@ -42,8 +42,8 @@ To deploy Jules Hub using Docker, follow these steps:
     version: '3.8'
 
     services:
-      jules-hub:
-        image: ghcr.io/cavuminfundo/jules-hub:latest
+      julius-hub:
+        image: ghcr.io/cavuminfundo/julius-hub:latest
         network_mode: host
         environment:
           - PORT=4100
@@ -81,7 +81,7 @@ For local development and testing, use the following commands:
 
 ## License
 
-Jules Hub is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+Julius Hub is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
 ---
 

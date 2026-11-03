@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 
 from hub.config_store import ConfigStore
 from hub.models import HubConfig, RepoScheduleConfig
+from hub.scanner import find_suggestions
 
 logger = logging.getLogger("hub.scheduler")
 
@@ -57,7 +58,8 @@ class BackgroundScheduler:
     async def trigger_repo(self, repo_name: str) -> Dict[str, Any]:
         """
         Trigger curation cycle for a repository.
-        Updates schedule timestamps and enforces max_pending_worktrees limit.
+        Scans for real candidates via find_suggestions, updates schedule timestamps,
+        and enforces max_pending_worktrees limit.
         """
         cfg = self.config_store.load_config()
         target_sched = next((s for s in cfg.repo_schedules if s.repo_name == repo_name), None)
@@ -87,17 +89,31 @@ class BackgroundScheduler:
                         "repo_name": repo_name,
                         "triggered": True,
                         "triggered_at": now_iso,
+                        "last_triggered_at": now_iso,
                         "status": "capped_pending_worktrees",
                         "active_worktrees": len(active_worktrees),
                     }
             except Exception as e:
                 logger.error("Error inspecting active worktrees for %s: %s", repo_name, e)
 
+        # Scan for real suggestions
+        suggestions_count = 0
+        if self.worktree_manager:
+            try:
+                repo_path = self.worktree_manager.resolve_repo_path(repo_name)
+                state = self.config_store.load_state()
+                suggs = find_suggestions(repo_path, ignored_ids=set(state.ignored_suggestions))
+                suggestions_count = len(suggs)
+            except Exception as e:
+                logger.debug("find_suggestions scan during trigger_repo for %s: %s", repo_name, e)
+
         return {
             "repo_name": repo_name,
             "triggered": True,
             "triggered_at": now_iso,
+            "last_triggered_at": now_iso,
             "status": "scheduled",
+            "suggestions_count": suggestions_count,
         }
 
     async def _tick(self) -> None:

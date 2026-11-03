@@ -1,52 +1,70 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
+  Sliders,
+  GitBranch,
+  Cpu,
+  Key,
   Save,
-  RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Cpu,
-  ShieldCheck,
   Plus,
   Trash2,
-  Server,
-  Sliders,
+  ArrowLeft,
+  RefreshCw,
+  Lock,
 } from 'lucide-react';
-import type { HubConfig, OllamaInstance, OllamaProbeResult } from '../types';
+import type {
+  CommunitySettings,
+  GitAuthoringMode,
+  HubConfig,
+  OllamaInstance,
+  OllamaProbeResult,
+  SecretsUpdateRequest,
+} from '../types';
 import { api, ApiError } from '../api';
 
 interface SettingsViewProps {
+  onClose?: () => void;
   onSaveConfig?: (cfg: HubConfig) => void;
 }
+
+const DEFAULT_SETTINGS: CommunitySettings = {
+  default_model: 'gemini-2.5-flash',
+  auto_find_issues: true,
+  export_as_pr: true,
+  git_commit_authoring: 'co_authored',
+  only_respond_to_mentions: true,
+  open_pr_as_draft: false,
+  cdp_url: 'http://127.0.0.1:9000',
+  workspaces_root: '/workspaces',
+  has_github_token: false,
+  has_cloud_api_key: false,
+  github_token_masked: null,
+  cloud_api_key_masked: null,
+};
 
 const DEFAULT_CONFIG: HubConfig = {
   ollama_instances: [
     {
       id: 1,
-      name: 'GPU Server 24/7',
-      url: 'http://192.168.88.117:11434',
+      name: 'Local Ollama',
+      url: 'http://localhost:11434',
       enabled: true,
       timeout_sec: 30,
-    },
-    {
-      id: 2,
-      name: 'Workstation RTX 5070 Ti',
-      url: 'http://100.102.204.70:11434',
-      enabled: true,
-      timeout_sec: 15,
     },
   ],
   junior_config: {
     provider: 'ollama',
     instance_id: 1,
     model_name: 'qwen2.5-coder',
-    fallback_provider: 'antigravity_cli',
+    fallback_provider: 'cdp',
     fallback_instance_id: undefined,
-    fallback_model: 'flash',
+    fallback_model: 'Gemini 2.5 Flash',
   },
   senior_config: {
     provider: 'cdp',
     instance_id: 1,
-    model_name: 'Gemini 4 Argon (Low)',
+    model_name: 'Gemini 2.5 Pro',
     fallback_provider: undefined,
     fallback_instance_id: undefined,
     fallback_model: undefined,
@@ -56,31 +74,44 @@ const DEFAULT_CONFIG: HubConfig = {
   cdp_port: 9000,
   max_diff_lines: 50,
   repo_schedules: [],
+  settings: DEFAULT_SETTINGS,
 };
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ onSaveConfig }) => {
+type SettingsSection = 'general' | 'integrations' | 'mcp' | 'api_key';
+
+export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, onSaveConfig }) => {
+  const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   const [config, setConfig] = useState<HubConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [testingId, setTestingId] = useState<number | null>(null);
-  const [testResults, setTestResults] = useState<Record<number, OllamaProbeResult>>({});
-  const [cdpModels, setCdpModels] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null);
 
-  // New instance form fields
+  // Secret Inputs (write-only)
+  const [githubTokenInput, setGithubTokenInput] = useState('');
+  const [geminiApiKeyInput, setGeminiApiKeyInput] = useState('');
+  const [openaiApiKeyInput, setOpenaiApiKeyInput] = useState('');
+  const [isSavingSecrets, setIsSavingSecrets] = useState(false);
+  const [secretsStatus, setSecretsStatus] = useState<{ success: boolean; message: string } | null>(null);
+
+  // CDP models & Ollama testing
+  const [cdpModels, setCdpModels] = useState<string[]>([]);
+  const [testingId, setTestingId] = useState<number | null>(null);
+  const [testResults, setTestResults] = useState<Record<number, OllamaProbeResult>>({});
+
+  // Add Ollama instance form
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newUrl, setNewUrl] = useState('');
+  const [newUrl, setNewUrl] = useState('http://localhost:11434');
   const [newTimeout, setNewTimeout] = useState(30);
 
-  // Load config & CDP models on mount
+  // Load config & models on mount
   useEffect(() => {
     let isMounted = true;
 
     async function loadData() {
       setIsLoading(true);
       try {
-        const [loadedConfig, loadedCdpModels] = await Promise.allSettled([
+        const [loadedConfig, loadedCdp] = await Promise.allSettled([
           api.getConfig(),
           api.getCdpModels(),
         ]);
@@ -88,22 +119,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSaveConfig }) => {
         if (!isMounted) return;
 
         if (loadedConfig.status === 'fulfilled') {
-          setConfig(loadedConfig.value);
+          const cfg = loadedConfig.value;
+          // Ensure settings object exists
+          if (!cfg.settings) {
+            cfg.settings = DEFAULT_SETTINGS;
+          }
+          setConfig(cfg);
         } else {
           setConfig(DEFAULT_CONFIG);
         }
 
-        if (loadedCdpModels.status === 'fulfilled' && loadedCdpModels.value.length > 0) {
-          setCdpModels(loadedCdpModels.value);
+        if (loadedCdp.status === 'fulfilled' && loadedCdp.value.length > 0) {
+          setCdpModels(loadedCdp.value);
         } else {
           setCdpModels([
-            'Gemini 4 Argon (Low)',
-            'Gemini 4 Argon (Medium)',
-            'Gemini 2.5 Pro',
             'Gemini 2.5 Flash',
+            'Gemini 2.5 Pro',
+            'Claude 3.7 Sonnet',
+            'GPT-4o',
           ]);
         }
-      } catch (err) {
+      } catch (e) {
         if (isMounted) setConfig(DEFAULT_CONFIG);
       } finally {
         if (isMounted) setIsLoading(false);
@@ -116,17 +152,84 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSaveConfig }) => {
     };
   }, []);
 
-  // Probe an Ollama instance and populate available models
-  const handleTestInstance = useCallback(async (inst: OllamaInstance) => {
+  // Update nested settings field
+  const updateSettings = (key: keyof CommunitySettings, value: unknown) => {
+    if (!config) return;
+    const currentSettings = config.settings || DEFAULT_SETTINGS;
+    setConfig({
+      ...config,
+      settings: {
+        ...currentSettings,
+        [key]: value,
+      },
+    });
+  };
+
+  // Save full configuration
+  const handleSaveConfig = async () => {
+    if (!config) return;
+    setIsSaving(true);
+    setSaveStatus(null);
+    try {
+      const updated = await api.updateConfig(config);
+      setConfig(updated);
+      setSaveStatus({ success: true, message: 'Settings saved successfully!' });
+      if (onSaveConfig) {
+        onSaveConfig(updated);
+      }
+      setTimeout(() => setSaveStatus(null), 4000);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.detail : 'Failed to save configuration';
+      setSaveStatus({ success: false, message: msg });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Save secrets via api.saveSecrets
+  const handleSaveSecrets = async (type: 'github' | 'cloud') => {
+    setIsSavingSecrets(true);
+    setSecretsStatus(null);
+    try {
+      const req: SecretsUpdateRequest = {};
+      if (type === 'github' && githubTokenInput.trim()) {
+        req.github_token = githubTokenInput.trim();
+      }
+      if (type === 'cloud') {
+        if (geminiApiKeyInput.trim()) req.gemini_api_key = geminiApiKeyInput.trim();
+        if (openaiApiKeyInput.trim()) req.openai_api_key = openaiApiKeyInput.trim();
+      }
+
+      const updatedSettings = await api.saveSecrets(req);
+      if (config) {
+        setConfig({
+          ...config,
+          settings: updatedSettings,
+        });
+      }
+      if (type === 'github') setGithubTokenInput('');
+      if (type === 'cloud') {
+        setGeminiApiKeyInput('');
+        setOpenaiApiKeyInput('');
+      }
+      setSecretsStatus({ success: true, message: 'Secrets saved securely to server!' });
+      setTimeout(() => setSecretsStatus(null), 4000);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.detail : 'Failed to save secrets';
+      setSecretsStatus({ success: false, message: msg });
+    } finally {
+      setIsSavingSecrets(false);
+    }
+  };
+
+  // Test Ollama Instance
+  const handleTestOllama = useCallback(async (inst: OllamaInstance) => {
     setTestingId(inst.id);
     try {
       const res = await api.testOllamaInstance(inst);
-      setTestResults((prev) => ({
-        ...prev,
-        [inst.id]: res,
-      }));
+      setTestResults((prev) => ({ ...prev, [inst.id]: res }));
     } catch (err: unknown) {
-      const msg = err instanceof ApiError ? err.detail : 'Connessione fallita';
+      const msg = err instanceof ApiError ? err.detail : 'Connection failed';
       setTestResults((prev) => ({
         ...prev,
         [inst.id]: {
@@ -141,7 +244,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSaveConfig }) => {
     }
   }, []);
 
-  // Add a new Ollama instance to config
+  // Add Ollama instance
   const handleAddInstance = () => {
     if (!config || !newName.trim() || !newUrl.trim()) return;
     const nextId = config.ollama_instances.length > 0
@@ -162,641 +265,666 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSaveConfig }) => {
     });
 
     setNewName('');
-    setNewUrl('');
+    setNewUrl('http://localhost:11434');
     setNewTimeout(30);
     setShowAddForm(false);
   };
 
-  // Remove an instance
+  // Remove Ollama instance
   const handleRemoveInstance = (id: number) => {
     if (!config) return;
-    if (config.ollama_instances.length <= 1) {
-      alert('Almeno un\'istanza Ollama deve rimanere configurata.');
-      return;
-    }
     setConfig({
       ...config,
       ollama_instances: config.ollama_instances.filter((i) => i.id !== id),
     });
   };
 
-  // Toggle instance enabled state
-  const handleToggleInstance = (id: number) => {
-    if (!config) return;
-    setConfig({
-      ...config,
-      ollama_instances: config.ollama_instances.map((inst) =>
-        inst.id === id ? { ...inst, enabled: !inst.enabled } : inst
-      ),
-    });
-  };
-
-  // Save current config
-  const handleSave = async () => {
-    if (!config) return;
-    setIsSaving(true);
-    setSaveStatus(null);
-    try {
-      const saved = await api.updateConfig(config);
-      setConfig(saved);
-      if (onSaveConfig) {
-        onSaveConfig(saved);
-      }
-      setSaveStatus({ success: true, message: 'Configurazione salvata con successo!' });
-      setTimeout(() => setSaveStatus(null), 4000);
-    } catch (err: unknown) {
-      const msg = err instanceof ApiError ? err.detail : 'Errore nel salvataggio della configurazione.';
-      setSaveStatus({ success: false, message: msg });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   if (isLoading || !config) {
     return (
-      <div className="max-w-4xl mx-auto p-6 text-zinc-400 flex items-center gap-2">
-        <RefreshCw className="w-4 h-4 animate-spin text-zinc-500" />
-        <span>Caricamento configurazione Jules Hub...</span>
+      <div className="min-h-[500px] flex items-center justify-center text-zinc-400">
+        <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+        <span className="text-sm font-medium">Loading settings...</span>
       </div>
     );
   }
 
-  // Determine current models list available for Junior model dropdown
-  const selectedJuniorInstanceId = config.junior_config.instance_id;
-  const juniorInstanceResult = testResults[selectedJuniorInstanceId];
-  const detectedJuniorModels = juniorInstanceResult?.models_list ?? [];
+  const s = config.settings || DEFAULT_SETTINGS;
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-8 text-zinc-200">
-      {/* Top Header & Save Button */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-        <div>
-          <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
-            <Sliders className="w-5 h-5 text-indigo-400" />
-            <span>Configurazione Hub &amp; Matrice Modelli</span>
-          </h2>
-          <p className="text-xs text-zinc-400 mt-0.5">
-            Gestisci le istanze Ollama distribuite, gli slot di esecuzione Junior e il gate di revisione Senior.
-          </p>
-        </div>
-
+    <div className="max-w-5xl mx-auto w-full px-4 py-8">
+      {/* Settings Top Bar */}
+      <div className="flex items-center justify-between pb-6 mb-8 border-b border-zinc-800/80">
         <div className="flex items-center gap-3">
-          {saveStatus ? (
-            <span
-              className={`text-xs px-2.5 py-1 rounded flex items-center gap-1.5 font-medium ${
-                saveStatus.success
-                  ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
-                  : 'bg-rose-950/80 text-rose-300 border border-rose-800'
-              }`}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Back to session"
+              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60 transition-colors"
             >
-              {saveStatus.success ? (
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              ) : (
-                <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-              )}
-              {saveStatus.message}
-            </span>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-          >
-            {isSaving ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            <span>{isSaving ? 'Salvataggio...' : 'Salva Configurazione'}</span>
-          </button>
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
+          <div>
+            <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
+              Settings
+            </h1>
+            <p className="text-xs text-zinc-400">
+              Configure models, GitHub credentials, integrations, and runtime providers
+            </p>
+          </div>
         </div>
+
+        <button
+          type="button"
+          onClick={async () => {
+            await handleSaveConfig();
+            if (onClose) onClose();
+          }}
+          disabled={isSaving}
+          className="inline-flex items-center gap-2 px-5 py-2.5 min-h-[44px] rounded-full bg-[#a78bfa] hover:bg-[#8b5cf6] text-zinc-950 font-semibold text-xs tracking-tight transition-all disabled:opacity-50 shadow-md"
+        >
+          <Save className="w-4 h-4" />
+          <span>{isSaving ? 'Salvataggio...' : 'Salva e chiudi'}</span>
+        </button>
       </div>
 
-      {/* Multi-Instance Ollama Registry */}
-      <section className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
-          <div className="flex items-center gap-2">
-            <Server className="w-5 h-5 text-indigo-400" />
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-100">
-                Gestore Multi-Istanza Ollama
-              </h3>
-              <p className="text-xs text-zinc-400">
-                Server Ollama registrati nel cluster locale o in rete per i task Junior e scan asincroni.
-              </p>
-            </div>
-          </div>
+      {/* Notifications */}
+      {saveStatus && (
+        <div
+          className={`mb-6 p-3 rounded-lg text-xs flex items-center gap-2.5 border ${
+            saveStatus.success
+              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60'
+              : 'bg-rose-950/40 text-rose-300 border-rose-800/60'
+          }`}
+        >
+          {saveStatus.success ? (
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          )}
+          <span>{saveStatus.message}</span>
+        </div>
+      )}
+
+      {secretsStatus && (
+        <div
+          className={`mb-6 p-3 rounded-lg text-xs flex items-center gap-2.5 border ${
+            secretsStatus.success
+              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60'
+              : 'bg-rose-950/40 text-rose-300 border-rose-800/60'
+          }`}
+        >
+          {secretsStatus.success ? (
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          )}
+          <span>{secretsStatus.message}</span>
+        </div>
+      )}
+
+      {/* Two-Column Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        {/* Left Sub-Navigation Menu */}
+        <nav className="space-y-1.5" aria-label="Settings navigation">
+          <button
+            type="button"
+            onClick={() => setActiveSection('general')}
+            className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-medium min-h-[44px] transition-colors text-left ${
+              activeSection === 'general'
+                ? 'bg-[#2e2348] text-[#c4b5fd] font-semibold border border-[#8b5cf6]/40'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+            }`}
+          >
+            <Sliders className="w-4 h-4 shrink-0" />
+            <span>General</span>
+          </button>
 
           <button
             type="button"
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors"
+            onClick={() => setActiveSection('integrations')}
+            className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-medium min-h-[44px] transition-colors text-left ${
+              activeSection === 'integrations'
+                ? 'bg-[#2e2348] text-[#c4b5fd] font-semibold border border-[#8b5cf6]/40'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+            }`}
           >
-            <Plus className="w-3.5 h-3.5 text-zinc-400" />
-            <span>{showAddForm ? 'Annulla' : 'Aggiungi Istanza'}</span>
+            <GitBranch className="w-4 h-4 shrink-0" />
+            <span>Integrations</span>
           </button>
-        </div>
 
-        {/* Add Instance Form */}
-        {showAddForm ? (
-          <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-4 space-y-3">
-            <h4 className="text-xs font-semibold text-zinc-200">Nuova Istanza Ollama</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button
+            type="button"
+            onClick={() => setActiveSection('mcp')}
+            className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-medium min-h-[44px] transition-colors text-left ${
+              activeSection === 'mcp'
+                ? 'bg-[#2e2348] text-[#c4b5fd] font-semibold border border-[#8b5cf6]/40'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+            }`}
+          >
+            <Cpu className="w-4 h-4 shrink-0" />
+            <span>MCP</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('api_key')}
+            className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-medium min-h-[44px] transition-colors text-left ${
+              activeSection === 'api_key'
+                ? 'bg-[#2e2348] text-[#c4b5fd] font-semibold border border-[#8b5cf6]/40'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+            }`}
+          >
+            <Key className="w-4 h-4 shrink-0" />
+            <span>API Key</span>
+          </button>
+        </nav>
+
+        {/* Right Content Panel */}
+        <div className="md:col-span-3 bg-[#141419] border border-zinc-800/90 rounded-2xl p-6 shadow-xl space-y-6">
+          {/* SECTION 1: GENERAL */}
+          {activeSection === 'general' && (
+            <div className="space-y-6">
               <div>
-                <label htmlFor="inst-name" className="block text-[11px] text-zinc-400 mb-1">
-                  Nome Istanza
+                <h2 className="text-base font-semibold text-zinc-100">
+                  General Preferences
+                </h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Default AI models, git commit authoring, and Pull Request workflow.
+                </p>
+              </div>
+
+              {/* Model settings */}
+              <div className="space-y-2 pt-2">
+                <label className="block text-xs font-medium text-zinc-300">
+                  Default Model
                 </label>
                 <input
-                  id="inst-name"
                   type="text"
-                  placeholder="es. Node GPU 2"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-indigo-500"
+                  value={s.default_model}
+                  onChange={(e) => updateSettings('default_model', e.target.value)}
+                  className="w-full bg-[#101014] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-[#8b5cf6]"
+                  placeholder="e.g. gemini-2.5-flash or qwen2.5-coder"
                 />
               </div>
-              <div>
-                <label htmlFor="inst-url" className="block text-[11px] text-zinc-400 mb-1">
-                  URL Endpoint
-                </label>
-                <input
-                  id="inst-url"
-                  type="text"
-                  placeholder="http://192.168.1.100:11434"
-                  value={newUrl}
-                  onChange={(e) => setNewUrl(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-100 font-mono focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div>
-                <label htmlFor="inst-timeout" className="block text-[11px] text-zinc-400 mb-1">
-                  Timeout (sec)
-                </label>
-                <input
-                  id="inst-timeout"
-                  type="number"
-                  min={5}
-                  max={120}
-                  value={newTimeout}
-                  onChange={(e) => setNewTimeout(Number(e.target.value))}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end pt-2">
-              <button
-                type="button"
-                onClick={handleAddInstance}
-                disabled={!newName.trim() || !newUrl.trim()}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold transition-colors disabled:opacity-50"
-              >
-                Salva Nuova Istanza
-              </button>
-            </div>
-          </div>
-        ) : null}
 
-        {/* Instances List */}
-        <div className="space-y-3">
-          {config.ollama_instances.map((inst) => {
-            const probe = testResults[inst.id];
-            const isTesting = testingId === inst.id;
-
-            return (
-              <div
-                key={inst.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between bg-zinc-950 p-3.5 rounded-lg border border-zinc-800 gap-3"
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    id={`inst-toggle-${inst.id}`}
-                    checked={inst.enabled}
-                    onChange={() => handleToggleInstance(inst.id)}
-                    className="mt-1 rounded bg-zinc-900 border-zinc-700 text-indigo-500 focus:ring-0 cursor-pointer"
-                    title={inst.enabled ? 'Disabilita istanza' : 'Abilita istanza'}
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <label
-                        htmlFor={`inst-toggle-${inst.id}`}
-                        className={`text-sm font-semibold cursor-pointer ${
-                          inst.enabled ? 'text-zinc-100' : 'text-zinc-500 line-through'
-                        }`}
-                      >
-                        {inst.name}
-                      </label>
-                      <span className="text-[11px] font-mono text-zinc-500">#{inst.id}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
-                        {inst.timeout_sec}s timeout
-                      </span>
-                    </div>
-                    <div className="text-xs font-mono text-zinc-400 mt-0.5">{inst.url}</div>
-
-                    {probe?.online_status && probe.models_list.length > 0 ? (
-                      <div className="text-[11px] text-zinc-400 mt-1 flex items-center gap-1.5 flex-wrap">
-                        <span className="text-zinc-500">Modelli rilevati ({probe.models_list.length}):</span>
-                        {probe.models_list.slice(0, 4).map((m) => (
-                          <span key={m} className="px-1.5 py-0.2 rounded bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono text-[10px]">
-                            {m}
-                          </span>
-                        ))}
-                        {probe.models_list.length > 4 ? (
-                          <span className="text-[10px] text-zinc-500">+{probe.models_list.length - 4} altri</span>
-                        ) : null}
-                      </div>
-                    ) : null}
+              {/* Junior & Senior Model Assignment */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div className="space-y-2 p-3.5 rounded-xl bg-[#101014] border border-zinc-800/80">
+                  <span className="text-xs font-semibold text-zinc-200 block">
+                    Junior Persona Engine
+                  </span>
+                  <p className="text-[11px] text-zinc-400">
+                    Runs fast local diff generation (Bolt, Palette, Sentinel).
+                  </p>
+                  <div className="pt-1">
+                    <label className="text-[11px] text-zinc-400 block mb-1">
+                      Provider & Model
+                    </label>
+                    <input
+                      type="text"
+                      value={config.junior_config.model_name}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          junior_config: { ...config.junior_config, model_name: e.target.value },
+                        })
+                      }
+                      className="w-full bg-[#16161d] border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-[#8b5cf6]"
+                    />
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 self-end sm:self-center">
-                  {probe ? (
-                    <span
-                      className={`text-xs px-2.5 py-1 rounded flex items-center gap-1.5 font-medium ${
-                        probe.online_status
-                          ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
-                          : 'bg-rose-950/80 text-rose-300 border border-rose-800'
-                      }`}
-                    >
-                      {probe.online_status ? (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Online ({probe.latency_ms}ms)</span>
-                        </>
-                      ) : (
-                        <>
-                          <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-                          <span title={probe.error || ''}>Offline</span>
-                        </>
-                      )}
-                    </span>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    onClick={() => handleTestInstance(inst)}
-                    disabled={isTesting}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
-                    <span>{isTesting ? 'Verifica...' : 'Test & Carica Modelli'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveInstance(inst.id)}
-                    className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 rounded transition-colors"
-                    title="Rimuovi istanza"
-                    aria-label={`Rimuovi istanza ${inst.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                <div className="space-y-2 p-3.5 rounded-xl bg-[#101014] border border-zinc-800/80">
+                  <span className="text-xs font-semibold text-zinc-200 block">
+                    Senior Reviewer Engine
+                  </span>
+                  <p className="text-[11px] text-zinc-400">
+                    Validates diff quality and gates Pull Request creation.
+                  </p>
+                  <div className="pt-1">
+                    <label className="text-[11px] text-zinc-400 block mb-1">
+                      Model / CDP Reviewer
+                    </label>
+                    <input
+                      type="text"
+                      value={config.senior_config.model_name}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          senior_config: { ...config.senior_config, model_name: e.target.value },
+                        })
+                      }
+                      className="w-full bg-[#16161d] border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-[#8b5cf6]"
+                    />
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </section>
 
-      {/* Junior & Senior Slots Matrix */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Slot Junior Coder */}
-        <section className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-4">
-          <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3">
-            <Cpu className="w-5 h-5 text-amber-400" />
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-100">Slot Junior Coder</h3>
-              <p className="text-xs text-zinc-400">
-                Esegue la generazione patch autonoma (&lt; 50 righe) e i test nel worktree isolato.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {/* Provider choice */}
-            <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1">
-                Provider Primario
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setConfig({
-                      ...config,
-                      junior_config: { ...config.junior_config, provider: 'ollama' },
-                    })
-                  }
-                  className={`py-2 px-3 rounded text-xs font-semibold border transition-colors ${
-                    config.junior_config.provider === 'ollama'
-                      ? 'bg-zinc-800 text-zinc-100 border-zinc-600'
-                      : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
-                  }`}
-                >
-                  Ollama (Locale / Rete)
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setConfig({
-                      ...config,
-                      junior_config: { ...config.junior_config, provider: 'antigravity_cli' },
-                    })
-                  }
-                  className={`py-2 px-3 rounded text-xs font-semibold border transition-colors ${
-                    config.junior_config.provider === 'antigravity_cli'
-                      ? 'bg-zinc-800 text-zinc-100 border-zinc-600'
-                      : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
-                  }`}
-                >
-                  Antigravity CLI (Flash)
-                </button>
+              {/* Export settings */}
+              <div className="pt-4 border-t border-zinc-800/80 space-y-3">
+                <h3 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">
+                  Export Settings
+                </h3>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={s.export_as_pr}
+                    onChange={(e) => updateSettings('export_as_pr', e.target.checked)}
+                    className="w-4 h-4 rounded bg-zinc-900 border-zinc-700 text-[#8b5cf6] focus:ring-[#8b5cf6] focus:ring-offset-0"
+                  />
+                  <div>
+                    <span className="text-xs font-medium text-zinc-200 group-hover:text-white">
+                      Export as pull request
+                    </span>
+                    <p className="text-[11px] text-zinc-400">
+                      Push completed worktree branch to origin and initiate GitHub PR.
+                    </p>
+                  </div>
+                </label>
               </div>
-            </div>
 
-            {/* If Ollama: Select Instance */}
-            {config.junior_config.provider === 'ollama' ? (
-              <div>
-                <label htmlFor="junior-instance" className="block text-xs font-medium text-zinc-300 mb-1">
-                  Istanza Ollama
+              {/* Git commit authoring */}
+              <div className="pt-4 border-t border-zinc-800/80 space-y-2">
+                <label className="block text-xs font-medium text-zinc-300">
+                  Git commit authoring
                 </label>
                 <select
-                  id="junior-instance"
-                  value={config.junior_config.instance_id}
+                  value={(s.git_commit_authoring as string) === 'jules_only' ? 'julius_only' : s.git_commit_authoring}
                   onChange={(e) =>
-                    setConfig({
-                      ...config,
-                      junior_config: {
-                        ...config.junior_config,
-                        instance_id: Number(e.target.value),
-                      },
-                    })
+                    updateSettings('git_commit_authoring', e.target.value as GitAuthoringMode)
                   }
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-zinc-700"
+                  className="w-full bg-[#101014] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-[#8b5cf6]"
                 >
-                  {config.ollama_instances.map((inst) => (
-                    <option key={inst.id} value={inst.id}>
-                      {inst.name} ({inst.url}) {inst.enabled ? '' : '[Disabilitato]'}
-                    </option>
-                  ))}
+                  <option value="co_authored">Co-authored (Julius + User)</option>
+                  <option value="julius_only">Julius only</option>
+                  <option value="user_only">User only</option>
                 </select>
+                <p className="text-[11px] text-zinc-400">
+                  Controls the `Co-authored-by:` metadata attached to automated commits.
+                </p>
               </div>
-            ) : null}
 
-            {/* Model Name selection */}
-            <div>
-              <label htmlFor="junior-model" className="block text-xs font-medium text-zinc-300 mb-1">
-                Modello Junior
-              </label>
-              {detectedJuniorModels.length > 0 ? (
-                <div className="space-y-1.5">
-                  <select
-                    id="junior-model"
-                    value={config.junior_config.model_name}
+              {/* Pull Request settings */}
+              <div className="pt-4 border-t border-zinc-800/80 space-y-3">
+                <h3 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">
+                  Pull Request Settings
+                </h3>
+
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={s.only_respond_to_mentions}
                     onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        junior_config: {
-                          ...config.junior_config,
-                          model_name: e.target.value,
-                        },
-                      })
+                      updateSettings('only_respond_to_mentions', e.target.checked)
                     }
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-zinc-700 font-mono"
-                  >
-                    {detectedJuniorModels.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                    {!detectedJuniorModels.includes(config.junior_config.model_name) ? (
-                      <option value={config.junior_config.model_name}>
-                        {config.junior_config.model_name} (personalizzato)
-                      </option>
-                    ) : null}
-                  </select>
-                </div>
-              ) : (
-                <input
-                  id="junior-model"
-                  type="text"
-                  value={config.junior_config.model_name}
-                  onChange={(e) =>
-                    setConfig({
-                      ...config,
-                      junior_config: {
-                        ...config.junior_config,
-                        model_name: e.target.value,
-                      },
-                    })
-                  }
-                  placeholder="qwen2.5-coder o nome tag Ollama"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-zinc-700"
-                />
-              )}
+                    className="w-4 h-4 rounded bg-zinc-900 border-zinc-700 text-[#8b5cf6] focus:ring-[#8b5cf6] focus:ring-offset-0"
+                  />
+                  <div>
+                    <span className="text-xs font-medium text-zinc-200 group-hover:text-white">
+                      Only respond to comments that mention @julius
+                    </span>
+                    <p className="text-[11px] text-zinc-400">
+                      Ignores general PR commentary unless explicitly addressed to Julius bot.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={s.open_pr_as_draft}
+                    onChange={(e) =>
+                      updateSettings('open_pr_as_draft', e.target.checked)
+                    }
+                    className="w-4 h-4 rounded bg-zinc-900 border-zinc-700 text-[#8b5cf6] focus:ring-[#8b5cf6] focus:ring-offset-0"
+                  />
+                  <div>
+                    <span className="text-xs font-medium text-zinc-200 group-hover:text-white">
+                      Open pull requests as drafts by default
+                    </span>
+                    <p className="text-[11px] text-zinc-400">
+                      Created PRs will require manual marking as ready for review before merge.
+                    </p>
+                  </div>
+                </label>
+              </div>
             </div>
+          )}
 
-            {/* Fallback Configuration */}
-            <div className="pt-2 border-t border-zinc-800/80 space-y-2">
-              <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                Configurazione Fallback Opzionale
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label htmlFor="fallback-provider" className="block text-[11px] text-zinc-400 mb-1">
-                    Provider Fallback
+          {/* SECTION 2: INTEGRATIONS */}
+          {activeSection === 'integrations' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-100">
+                  Integrations
+                </h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Configure GitHub Personal Access Token and workspace directories.
+                </p>
+              </div>
+
+              {/* GitHub Token Config */}
+              <div className="p-4 rounded-xl bg-[#101014] border border-zinc-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-zinc-200 flex items-center gap-2">
+                    <Lock className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>GitHub Personal Access Token</span>
                   </label>
-                  <select
-                    id="fallback-provider"
-                    value={config.junior_config.fallback_provider || 'none'}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        junior_config: {
-                          ...config.junior_config,
-                          fallback_provider: e.target.value === 'none' ? undefined : e.target.value,
-                        },
-                      })
-                    }
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-100 focus:outline-none"
-                  >
-                    <option value="none">Nessun Fallback</option>
-                    <option value="antigravity_cli">Antigravity CLI</option>
-                    <option value="ollama">Ollama</option>
-                  </select>
+                  {s.has_github_token ? (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      Configured ({s.github_token_masked || '••••••••'})
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-zinc-400">
+                      Not configured (falling back to local gh CLI / env)
+                    </span>
+                  )}
                 </div>
 
-                <div>
-                  <label htmlFor="fallback-model" className="block text-[11px] text-zinc-400 mb-1">
-                    Modello Fallback
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    value={githubTokenInput}
+                    onChange={(e) => setGithubTokenInput(e.target.value)}
+                    placeholder="Enter new GitHub token (ghp_...)"
+                    className="flex-1 bg-[#16161d] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-[#8b5cf6]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveSecrets('github')}
+                    disabled={isSavingSecrets || !githubTokenInput.trim()}
+                    className="px-4 py-2 min-h-[44px] rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-medium transition-colors disabled:opacity-50"
+                  >
+                    Save Token
+                  </button>
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  Required for automated `gh pr create` and branch pushing when running outside a configured local git terminal.
+                </p>
+              </div>
+
+              {/* Workspaces Root Directory */}
+              <div className="space-y-2 pt-2">
+                <label className="block text-xs font-medium text-zinc-300">
+                  Workspaces Root Directory
+                </label>
+                <input
+                  type="text"
+                  value={s.workspaces_root}
+                  onChange={(e) => updateSettings('workspaces_root', e.target.value)}
+                  className="w-full bg-[#101014] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-[#8b5cf6]"
+                  placeholder="/workspaces or path to git repositories"
+                />
+                <p className="text-[11px] text-zinc-400">
+                  Directory where Julius Hub searches for local git projects to curate.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 3: MCP */}
+          {activeSection === 'mcp' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-100">
+                  MCP & Chrome DevTools Protocol
+                </h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Configure browser debugging bridge and Antigravity CDP connector.
+                </p>
+              </div>
+
+              {/* CDP Bridge URL */}
+              <div className="p-4 rounded-xl bg-[#101014] border border-zinc-800/80 space-y-3">
+                <label className="block text-xs font-semibold text-zinc-200">
+                  CDP Bridge URL
+                </label>
+                <input
+                  type="text"
+                  value={s.cdp_url}
+                  onChange={(e) => updateSettings('cdp_url', e.target.value)}
+                  className="w-full bg-[#16161d] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-[#8b5cf6]"
+                  placeholder="http://127.0.0.1:9000"
+                />
+                <p className="text-[11px] text-zinc-400">
+                  Port where Antigravity Desktop exposes the CDP remote debugging websocket.
+                </p>
+              </div>
+
+              {/* Available CDP Models */}
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-zinc-300">
+                  Discovered CDP Senior Models
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {cdpModels.map((m) => (
+                    <span
+                      key={m}
+                      className="px-2.5 py-1 rounded-md text-xs bg-[#101014] border border-zinc-800 text-zinc-300 font-mono"
+                    >
+                      {m}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 4: API KEY */}
+          {activeSection === 'api_key' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-100">
+                  API Keys & Inference Clusters
+                </h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Manage Cloud LLM keys and local Ollama cluster instances.
+                </p>
+              </div>
+
+              {/* Gemini / OpenAI Cloud Keys */}
+              <div className="p-4 rounded-xl bg-[#101014] border border-zinc-800/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-zinc-200">
+                    Cloud LLM API Keys
+                  </span>
+                  {s.has_cloud_api_key ? (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      Cloud Key Configured ({s.cloud_api_key_masked || '••••••••'})
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-zinc-400">
+                      Not configured (Ollama fallback active)
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] text-zinc-400 block">
+                    Gemini API Key
                   </label>
                   <input
-                    id="fallback-model"
-                    type="text"
-                    value={config.junior_config.fallback_model || ''}
-                    placeholder="flash"
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        junior_config: {
-                          ...config.junior_config,
-                          fallback_model: e.target.value || undefined,
-                        },
-                      })
-                    }
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-100 font-mono focus:outline-none"
+                    type="password"
+                    value={geminiApiKeyInput}
+                    onChange={(e) => setGeminiApiKeyInput(e.target.value)}
+                    placeholder="Enter new Gemini API Key"
+                    className="w-full bg-[#16161d] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-[#8b5cf6]"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] text-zinc-400 block">
+                    OpenAI / Compatible API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={openaiApiKeyInput}
+                    onChange={(e) => setOpenaiApiKeyInput(e.target.value)}
+                    placeholder="Enter new OpenAI Compatible API Key"
+                    className="w-full bg-[#16161d] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-[#8b5cf6]"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveSecrets('cloud')}
+                    disabled={isSavingSecrets || (!geminiApiKeyInput.trim() && !openaiApiKeyInput.trim())}
+                    className="px-4 py-2 min-h-[44px] rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-medium transition-colors disabled:opacity-50"
+                  >
+                    Save Cloud Keys
+                  </button>
+                </div>
+              </div>
+
+              {/* Ollama Instances Cluster */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">
+                      Ollama Cluster Instances
+                    </h3>
+                    <p className="text-[11px] text-zinc-400">
+                      Multi-instance load balancer for local code intelligence.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(!showAddForm)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Instance</span>
+                  </button>
+                </div>
+
+                {/* Add Instance Form */}
+                {showAddForm && (
+                  <div className="p-4 rounded-xl bg-[#101014] border border-zinc-800/80 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1">
+                          Instance Name
+                        </label>
+                        <input
+                          type="text"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          placeholder="e.g. Local Ollama"
+                          className="w-full bg-[#16161d] border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs text-zinc-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1">
+                          Server URL
+                        </label>
+                        <input
+                          type="text"
+                          value={newUrl}
+                          onChange={(e) => setNewUrl(e.target.value)}
+                          placeholder="http://localhost:11434"
+                          className="w-full bg-[#16161d] border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs text-zinc-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1">
+                          Timeout (seconds)
+                        </label>
+                        <input
+                          type="number"
+                          value={newTimeout}
+                          onChange={(e) => setNewTimeout(Number(e.target.value) || 30)}
+                          className="w-full bg-[#16161d] border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs text-zinc-100"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddForm(false)}
+                        className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAddInstance}
+                        className="px-3 py-1.5 rounded bg-[#8b5cf6] text-white text-xs font-medium hover:bg-[#7c3aed]"
+                      >
+                        Confirm Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Instance List */}
+                <div className="space-y-2">
+                  {config.ollama_instances.map((inst) => {
+                    const probe = testResults[inst.id];
+                    const isTesting = testingId === inst.id;
+
+                    return (
+                      <div
+                        key={inst.id}
+                        className="flex items-center justify-between p-3.5 rounded-xl bg-[#101014] border border-zinc-800/80 gap-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-zinc-200">
+                              {inst.name}
+                            </span>
+                            <span className="text-[11px] font-mono text-zinc-400 truncate">
+                              {inst.url}
+                            </span>
+                          </div>
+                          {probe && (
+                            <p
+                              className={`text-[11px] mt-1 ${
+                                probe.online_status
+                                  ? 'text-emerald-400'
+                                  : 'text-rose-400'
+                              }`}
+                            >
+                              {probe.online_status
+                                ? `Online (${probe.latency_ms.toFixed(0)}ms) • ${
+                                    probe.models_list.length
+                                  } models available`
+                                : `Offline: ${probe.error || 'Connection failed'}`}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleTestOllama(inst)}
+                            disabled={isTesting}
+                            className="px-3 py-1.5 min-h-[36px] rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors disabled:opacity-50"
+                          >
+                            {isTesting ? 'Testing...' : 'Test'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveInstance(inst.id)}
+                            aria-label={`Remove instance ${inst.name}`}
+                            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-
-        {/* Slot Senior Reviewer */}
-        <section className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-4">
-          <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3">
-            <ShieldCheck className="w-5 h-5 text-emerald-400" />
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-100">Slot Senior Reviewer</h3>
-              <p className="text-xs text-zinc-400">
-                Audit gate prima della creazione Pull Request: verifica scope &lt; 50 righe, sicurezza e test.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {/* Modalità Senior Review */}
-            <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1">
-                Modalità di Revisione Senior
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setConfig({
-                      ...config,
-                      senior_mode: 'cdp',
-                      senior_config: {
-                        ...config.senior_config,
-                        provider: 'cdp',
-                        model_name: config.senior_config.model_name || 'Gemini 4 Argon (Low)',
-                      },
-                    })
-                  }
-                  className={`py-2 px-3 rounded text-xs font-semibold border transition-colors ${
-                    config.senior_mode === 'cdp'
-                      ? 'bg-zinc-800 text-zinc-100 border-zinc-600'
-                      : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
-                  }`}
-                >
-                  Antigravity IDE via CDP :9000
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setConfig({
-                      ...config,
-                      senior_mode: 'in_cockpit',
-                      senior_config: {
-                        ...config.senior_config,
-                        provider: 'ollama',
-                      },
-                    })
-                  }
-                  className={`py-2 px-3 rounded text-xs font-semibold border transition-colors ${
-                    config.senior_mode === 'in_cockpit'
-                      ? 'bg-zinc-800 text-zinc-100 border-zinc-600'
-                      : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
-                  }`}
-                >
-                  In-Cockpit Senior Review
-                </button>
-              </div>
-            </div>
-
-            {/* Model Picker for Senior */}
-            <div>
-              <label htmlFor="senior-model-select" className="block text-xs font-medium text-zinc-300 mb-1">
-                Modello Revisore Senior
-              </label>
-              <select
-                id="senior-model-select"
-                value={config.senior_config.model_name}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    senior_config: {
-                      ...config.senior_config,
-                      model_name: e.target.value,
-                    },
-                  })
-                }
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-zinc-700"
-              >
-                {/* CDP Models or Fallback Models */}
-                {cdpModels.map((m) => (
-                  <option key={m} value={m}>
-                    {m} {m.includes('Argon (Low)') ? '★ (Prima scelta consigliata)' : ''}
-                  </option>
-                ))}
-                {!cdpModels.includes(config.senior_config.model_name) ? (
-                  <option value={config.senior_config.model_name}>
-                    {config.senior_config.model_name}
-                  </option>
-                ) : null}
-              </select>
-              <p className="text-[11px] text-zinc-500 mt-1">
-                {config.senior_mode === 'cdp'
-                  ? 'Il modello viene selezionato automaticamente nel selettore Antigravity via porta 9000.'
-                  : 'Il prompt di audit viene inviato all\'engine locale/Ollama configurato.'}
-              </p>
-            </div>
-
-            {/* Scope Ceiling & CDP Port Settings */}
-            <div className="pt-2 border-t border-zinc-800/80 grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="max-diff-lines" className="block text-[11px] text-zinc-400 mb-1">
-                  Scope Ceiling (Max Righe Diff)
-                </label>
-                <input
-                  id="max-diff-lines"
-                  type="number"
-                  min={10}
-                  max={200}
-                  value={config.max_diff_lines}
-                  onChange={(e) =>
-                    setConfig({
-                      ...config,
-                      max_diff_lines: Number(e.target.value) || 50,
-                    })
-                  }
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-100 font-mono focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="cdp-port" className="block text-[11px] text-zinc-400 mb-1">
-                  Porta CDP Debugger
-                </label>
-                <input
-                  id="cdp-port"
-                  type="number"
-                  value={config.cdp_port}
-                  onChange={(e) =>
-                    setConfig({
-                      ...config,
-                      cdp_port: Number(e.target.value) || 9000,
-                    })
-                  }
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-100 font-mono focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-        </section>
+          )}
+        </div>
       </div>
     </div>
   );

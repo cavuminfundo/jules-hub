@@ -1,13 +1,13 @@
-# Contributing to Jules MCP Server
+# Contributing to Julius Hub
 
-Thank you for considering contributing to `jules-mcp-server`! Contributions are welcome from the community.
+Thank you for considering contributing to `julius-hub`! Contributions are welcome from the community.
 
 ## Development Setup
 
 1. **Fork and Clone**:
    ```bash
-   git clone https://github.com/your-username/jules-mcp-server.git
-   cd jules-mcp-server
+   git clone https://github.com/your-username/julius-hub.git
+   cd julius-hub
    ```
 
 2. **Environment & Dependencies**:
@@ -18,13 +18,12 @@ Thank you for considering contributing to `jules-mcp-server`! Contributions are 
 
 3. **Running the Server Locally**:
    ```bash
-   export JULES_API_KEY="your_jules_api_key"
-   uv run python -m jules_mcp.jules_mcp
+   uv run uvicorn hub.app:app --host 0.0.0.0 --port 4100
    ```
 
 ## Pull Request Guidelines
 
 - **Branch Naming**: Use descriptive branch names like `feature/add-activity-filter` or `fix/httpx-timeout`.
-- **Code Style & Formatting**: Follow PEP8 conventions and keep FastMCP tool type annotations clean (avoid optional types without explicit defaults).
-- **Commit Messages**: Follow [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat(mcp): ...`, `fix(api): ...`, `docs(readme): ...`).
+- **Code Style & Formatting**: Follow PEP8 conventions.
+- **Commit Messages**: Follow [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat(hub): ...`, `fix(api): ...`, `docs(readme): ...`).
 - **PR Description**: Describe the problem solved, changes introduced, and how to test.

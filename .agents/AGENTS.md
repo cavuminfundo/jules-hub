@@ -1,7 +1,7 @@
-# Workspace Agent Router — Jules Curator Hub
+# Workspace Agent Router — Julius Curator Hub
 
-> **Jules Curator Hub** is an autonomous, background worktree runner and code polishing engine.
-> It inherits the best architectural practices from Google Jules:
+> **Julius Curator Hub** is an autonomous, background worktree runner and code polishing engine.
+> It implements autonomous personas for code curation:
 > - **⚡ Bolt**: Performance & efficiency optimizer.
 > - **🎨 Palette**: Micro-UX & accessibility craftsperson.
 > - **🛡️ Sentinel**: Security, hardening & defense-in-depth guardian.

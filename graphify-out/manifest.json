@@ -1,22 +1,12 @@
 {
   "pyproject.toml": {
-    "mtime": 1793466136.6345189,
-    "ast_hash": "9e72124b98bab40f9b2be965a5766a32",
-    "semantic_hash": ""
-  },
-  "curator.py": {
-    "mtime": 1793443828.4614043,
-    "ast_hash": "8708edb9ef15f35d11f4476761b6b92d",
-    "semantic_hash": ""
-  },
-  "tests/test_curator.py": {
-    "mtime": 1793443877.947367,
-    "ast_hash": "697037ba00138c17ec2b57746320527d",
+    "mtime": 1793699166.3853915,
+    "ast_hash": "0ae8ac52270b43a6356873d481d899ce",
     "semantic_hash": ""
   },
   ".agents/AGENTS.md": {
-    "mtime": 1793442731.0672107,
-    "ast_hash": "c111bcb7d8e2065735ce30dfc4a40fba",
+    "mtime": 1793699263.553262,
+    "ast_hash": "5ea548e8295dc961ef0202e468f82ab4",
     "semantic_hash": ""
   },
   ".agents/memory/lessons.md": {
@@ -30,13 +20,13 @@
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
-    "mtime": 1785230800.5518987,
-    "ast_hash": "6c4921fb6d7ad04e093a37eb1b6a8517",
+    "mtime": 1793699254.6872737,
+    "ast_hash": "1528f4a19175b81aed084a289062d0fd",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1793468108.6593819,
-    "ast_hash": "c994d18c6927bbc8231b3e7f08a9cbb3",
+    "mtime": 1793699236.2992983,
+    "ast_hash": "e577dbfec8e9de4cd6aee87686ee52d7",
     "semantic_hash": ""
   },
   "journal/bolt.md": {
@@ -55,13 +45,13 @@
     "semantic_hash": ""
   },
   "hub/__init__.py": {
-    "mtime": 1793462642.9029536,
-    "ast_hash": "289e8cc57644d6217cf582a2214a939f",
+    "mtime": 1793699357.391137,
+    "ast_hash": "6b3b450a0e9676dd487c42677c178ded",
     "semantic_hash": ""
   },
   "hub/app.py": {
-    "mtime": 1793473452.7470636,
-    "ast_hash": "5d9c837bfa373d22d3a6434181720626",
+    "mtime": 1793699346.2371519,
+    "ast_hash": "fdb6c5ccd69a6f38b2f376ea950a4c76",
     "semantic_hash": ""
   },
   "hub/cdp_bridge.py": {
@@ -70,53 +60,53 @@
     "semantic_hash": ""
   },
   "hub/engine_router.py": {
-    "mtime": 1793473293.6441922,
-    "ast_hash": "071c9981ef18bac55ce50967ce081b42",
+    "mtime": 1793699394.8910868,
+    "ast_hash": "216a5f718c71e34c70f60bc5b3b17283",
     "semantic_hash": ""
   },
   "hub/models.py": {
-    "mtime": 1793473200.761979,
-    "ast_hash": "f85006807b051e935659222abcd80444",
+    "mtime": 1793699242.1482906,
+    "ast_hash": "1f551b5fac64db02b5501fdc2f7fcaea",
     "semantic_hash": ""
   },
   "hub/scanner.py": {
-    "mtime": 1793473330.8399055,
-    "ast_hash": "cb698b901d965f2254d641dfbea4a511",
+    "mtime": 1793699399.2950811,
+    "ast_hash": "712162a8db72c13c6dadba0c5a71a97c",
     "semantic_hash": ""
   },
   "hub/worktree_manager.py": {
-    "mtime": 1793462788.9200919,
-    "ast_hash": "d6702d423fe8c574d61d925c9eb9fb0c",
+    "mtime": 1793699284.0362346,
+    "ast_hash": "bf671a35e6d44d4766bd5a5fc790302e",
     "semantic_hash": ""
   },
   "tests/test_api.py": {
-    "mtime": 1793464347.1044645,
-    "ast_hash": "d743332fd28a47e40f8535673a5da356",
+    "mtime": 1793699420.327053,
+    "ast_hash": "7df89a3ab66969e304156d09d89cd979",
     "semantic_hash": ""
   },
   "tests/test_cdp_bridge.py": {
-    "mtime": 1793464190.612521,
-    "ast_hash": "cfaa4ae01875fae84570a066af646c9c",
+    "mtime": 1793636270.104024,
+    "ast_hash": "a56a33eabede19d07862caafaf92470e",
     "semantic_hash": ""
   },
   "tests/test_engine_router.py": {
-    "mtime": 1793463735.2373579,
-    "ast_hash": "c37c5dbd9eecb4a3d4c46ac867326a7b",
+    "mtime": 1793699404.4430742,
+    "ast_hash": "cda910fa58f7494fd90cb0690ad22683",
     "semantic_hash": ""
   },
   "tests/test_scanner.py": {
-    "mtime": 1793462835.391695,
-    "ast_hash": "8c2523c18ae9002ab8dd832636c3a5db",
+    "mtime": 1793699408.0090694,
+    "ast_hash": "de172b3111465a9bd3be09f9160628b1",
     "semantic_hash": ""
   },
   "tests/test_worktree_manager.py": {
-    "mtime": 1793462815.5224445,
-    "ast_hash": "47f5a948a22f80a390ee9c7945f94d24",
+    "mtime": 1793699412.5630634,
+    "ast_hash": "50417f15b75e6e92daa972b62447a5d8",
     "semantic_hash": ""
   },
   "ui/package.json": {
-    "mtime": 1793464451.1474078,
-    "ast_hash": "78457a85380e990bc52c25e9a0a64616",
+    "mtime": 1793699141.152425,
+    "ast_hash": "fb43ddba279b7050ba883404d3bb7b15",
     "semantic_hash": ""
   },
   "ui/postcss.config.js": {
@@ -125,18 +115,18 @@
     "semantic_hash": ""
   },
   "ui/src/App.tsx": {
-    "mtime": 1793473439.438149,
-    "ast_hash": "a398761c97904d7756bc72f476392695",
+    "mtime": 1793699226.1563118,
+    "ast_hash": "bfa9d26822a717f100e79b01fdc14650",
     "semantic_hash": ""
   },
   "ui/src/api.ts": {
-    "mtime": 1793473209.2779024,
-    "ast_hash": "c204736342cfcd218ce042eb4a503305",
+    "mtime": 1793699155.5164058,
+    "ast_hash": "273d95da25cb0fd9ca60262400c8ae5a",
     "semantic_hash": ""
   },
   "ui/src/components/DiffDrawer.tsx": {
-    "mtime": 1793473305.0711024,
-    "ast_hash": "36117cc7984fbae1a9a56df782296e58",
+    "mtime": 1793636211.3782582,
+    "ast_hash": "24eb82972c797854999fe138f385b270",
     "semantic_hash": ""
   },
   "ui/src/components/RepoSelector.tsx": {
@@ -145,8 +135,8 @@
     "semantic_hash": ""
   },
   "ui/src/components/SuggestionCard.tsx": {
-    "mtime": 1793473232.6926963,
-    "ast_hash": "1a4735750fb93cc1e8bcc99a36a72699",
+    "mtime": 1793699172.791383,
+    "ast_hash": "ac9673d0b75f61f48747ee8979e3a0b2",
     "semantic_hash": ""
   },
   "ui/src/components/Toast.tsx": {
@@ -165,8 +155,8 @@
     "semantic_hash": ""
   },
   "ui/src/types.ts": {
-    "mtime": 1793473183.4091384,
-    "ast_hash": "93c1b90a6fd7fe67aab3915dce893ff9",
+    "mtime": 1793699150.841412,
+    "ast_hash": "3b6c13479049c5fda4b82bdb29812939",
     "semantic_hash": ""
   },
   "ui/tailwind.config.js": {
@@ -190,8 +180,8 @@
     "semantic_hash": ""
   },
   "compose.yaml": {
-    "mtime": 1793465101.557355,
-    "ast_hash": "823e537cde8c4aa35e4da9ffa2444595",
+    "mtime": 1793699188.7673616,
+    "ast_hash": "852a1b8167ff2e237332584e4569b82e",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-10-31-jules-hub.md": {
@@ -205,43 +195,43 @@
     "semantic_hash": ""
   },
   "ui/index.html": {
-    "mtime": 1793464480.1233897,
-    "ast_hash": "ead6b5b41dc91599ddc8c592b9983741",
+    "mtime": 1793699134.447434,
+    "ast_hash": "e0c124438ab1a1124baddd7b84ce91a3",
     "semantic_hash": ""
   },
   "data/hub_state.json": {
-    "mtime": 1793473553.905559,
-    "ast_hash": "99498c5ce27c853f38dd705f4c2b7177",
+    "mtime": 1793699531.108905,
+    "ast_hash": "206fa2e8c64b011c0590832e937bd13b",
     "semantic_hash": ""
   },
   "hub/config_store.py": {
-    "mtime": 1793473217.4248297,
-    "ast_hash": "3c434c4eb73fac8eae79fb94c9512a95",
+    "mtime": 1793699257.2422705,
+    "ast_hash": "30ccf5fcba693b70633e211ecf9d9f0c",
     "semantic_hash": ""
   },
   "hub/scheduler.py": {
-    "mtime": 1793473346.7747874,
-    "ast_hash": "4ec7fa9b503c5b90868d2b5bf9a2b89a",
+    "mtime": 1793636161.1024883,
+    "ast_hash": "16d2923d8e45e42b68d1dca25f4ddd57",
     "semantic_hash": ""
   },
   "tests/test_config_store.py": {
-    "mtime": 1793473228.588732,
-    "ast_hash": "c1b655e0540413909cfb998a44bd659f",
+    "mtime": 1793699201.7533443,
+    "ast_hash": "5cc22cdc75e3cb698022aa772abfc61a",
     "semantic_hash": ""
   },
   "tests/test_scheduler_and_senior.py": {
-    "mtime": 1793473484.2648673,
-    "ast_hash": "b5a59e906603a5c13069fdf786fc74cd",
+    "mtime": 1793636295.9249315,
+    "ast_hash": "e06b308f0ea212f7e93c72aac2cc8083",
     "semantic_hash": ""
   },
   "ui/src/components/SchedulerPanel.tsx": {
-    "mtime": 1793473395.7574399,
-    "ast_hash": "a82d0af0d346dd1c84b2834c01a11e21",
+    "mtime": 1793636442.044516,
+    "ast_hash": "11919539317a4e76a850d75bef41b777",
     "semantic_hash": ""
   },
   "ui/src/components/SettingsView.tsx": {
-    "mtime": 1793473465.671982,
-    "ast_hash": "537a3082af725b7cef57a60781e7d063",
+    "mtime": 1793699197.6373498,
+    "ast_hash": "be529ca62496cee43fbfde94e41d2a48",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-10-31-jules-hub-v2-autonomous-cockpit.md": {
@@ -252,6 +242,36 @@
   "docs/superpowers/specs/2026-10-31-jules-hub-v2-autonomous-cockpit-design.md": {
     "mtime": 1793470369.776515,
     "ast_hash": "8c45be2448e45311ca5d0aa8ecf2eabc",
+    "semantic_hash": ""
+  },
+  "data/hub_config.json": {
+    "mtime": 1793698206.5016618,
+    "ast_hash": "a17c1d79e77c202738edfae635568291",
+    "semantic_hash": ""
+  },
+  "ui/src/components/Sidebar.tsx": {
+    "mtime": 1793699160.3103995,
+    "ast_hash": "e859ff7e90a31c3c3a8a6fd07e8d3e82",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-11-02-jules-hub-v3-production-ui.md": {
+    "mtime": 1793635319.5561922,
+    "ast_hash": "2586075a2bb2f4d3c88a4432ad28ae42",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-11-02-jules-hub-v3-production-ui-design.md": {
+    "mtime": 1793635014.3041773,
+    "ast_hash": "ae07856713c840bdd2201bd999679aa2",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-11-03-julius-hub-rebranding.md": {
+    "mtime": 1793698885.3379698,
+    "ast_hash": "2d07a27b319f6831d2ebf628b07fc2a5",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-11-03-julius-hub-rebranding-design.md": {
+    "mtime": 1793698496.7405317,
+    "ast_hash": "b092541e1cdd750ad87b085f1afc0765",
     "semantic_hash": ""
   }
 }

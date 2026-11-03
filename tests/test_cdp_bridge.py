@@ -19,7 +19,7 @@ from hub.models import EscalateRequest
 def sample_req():
     return EscalateRequest(
         repo="jules-hub",
-        worktree_path="/home/federico/jules/worktrees/jules-hub-bolt-1",
+        worktree_path="/workspaces/worktrees/jules-hub-bolt-1",
         branch="curator/bolt-20261031-1530",
         diff_summary="Optimize database query batching (< 20 lines)",
         test_status="PASSED (14 fast tests green)",

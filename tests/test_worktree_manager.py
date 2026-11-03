@@ -1,5 +1,5 @@
 """
-Unit tests for Jules Hub Worktree Manager (hub/worktree_manager.py).
+Unit tests for Julius Hub Worktree Manager (hub/worktree_manager.py).
 Tests isolated worktree lifecycle, naming convention, test auto-detection,
 process group timeout handling (killpg), and rollback on failure.
 """

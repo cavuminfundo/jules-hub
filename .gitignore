@@ -18,3 +18,5 @@ __pycache__/
 node_modules/
 dist/
 .codegraph/
+data/hub_secrets.json
+data/hub_config.json

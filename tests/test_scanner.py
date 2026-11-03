@@ -1,5 +1,5 @@
 """
-Unit tests for Jules Hub Scanner (hub/scanner.py).
+Unit tests for Julius Hub Scanner (hub/scanner.py).
 Verifies detection of micro-improvements across Bolt (Performance),
 Palette (UX/Hygiene/Tests), and Sentinel (Security) personas, as well as
 filtering and GitHub CI log handling.
@@ -94,7 +94,7 @@ def test_palette_suggestions(tmp_path: Path):
 
     for s in suggestions:
         assert s.persona == "palette"
-        assert s.category in {"hygiene", "tests"}
+        assert s.category in {"hygiene", "tests", "cleanup", "code_health", "testing"}
 
 
 def test_bolt_suggestions(tmp_path: Path):
@@ -144,6 +144,10 @@ def test_mode_and_category_filtering(tmp_path: Path):
     # Category filter: performance only
     perf_only = find_suggestions(tmp_path, mode="all", category="performance")
     assert all(s.category == "performance" for s in perf_only)
+
+    # Official Jules category filter: testing and cleanup aliases
+    cleanup_suggs = find_suggestions(tmp_path, mode="all", category="cleanup")
+    assert isinstance(cleanup_suggs, list)
 
     # All mode and category
     all_results = find_suggestions(tmp_path, mode="all", category="all")

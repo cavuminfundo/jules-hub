@@ -33,6 +33,7 @@ interface DiffDrawerProps {
   isEscalating?: boolean;
   initialReview?: SeniorReviewResult | null;
   onPrCreated?: (prUrl: string) => void;
+  initialPrUrl?: string | null;
 }
 
 export const DiffDrawer: React.FC<DiffDrawerProps> = ({
@@ -47,6 +48,7 @@ export const DiffDrawer: React.FC<DiffDrawerProps> = ({
   isEscalating = false,
   initialReview = null,
   onPrCreated,
+  initialPrUrl = null,
 }) => {
   const [activeTab, setActiveTab] = useState<'diff' | 'logs'>('logs');
   const [copied, setCopied] = useState(false);
@@ -57,7 +59,11 @@ export const DiffDrawer: React.FC<DiffDrawerProps> = ({
   const [isReviewing, setIsReviewing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [isCreatingPr, setIsCreatingPr] = useState(false);
-  const [prResult, setPrResult] = useState<CreatePrResponse | null>(null);
+  const [prResult, setPrResult] = useState<CreatePrResponse | null>(
+    initialPrUrl
+      ? { success: true, task_id: taskId || '', pr_url: initialPrUrl, message: 'Existing Pull Request' }
+      : null
+  );
   const [prError, setPrError] = useState<string | null>(null);
 
   // Hook for live SSE log streaming from /api/stream/{taskId}
@@ -69,9 +75,18 @@ export const DiffDrawer: React.FC<DiffDrawerProps> = ({
   useEffect(() => {
     setSeniorReview(initialReview);
     setReviewError(null);
-    setPrResult(null);
+    if (initialPrUrl) {
+      setPrResult({
+        success: true,
+        task_id: taskId || '',
+        pr_url: initialPrUrl,
+        message: 'Existing Pull Request',
+      });
+    } else {
+      setPrResult(null);
+    }
     setPrError(null);
-  }, [taskId, initialReview]);
+  }, [taskId, initialReview, initialPrUrl]);
 
   // Auto-scroll terminal when new logs arrive
   useEffect(() => {
@@ -213,9 +228,9 @@ export const DiffDrawer: React.FC<DiffDrawerProps> = ({
         aria-hidden="true"
       />
 
-      <div className="relative w-full max-w-3xl bg-zinc-950 border-l border-zinc-800 flex flex-col h-full shadow-2xl z-10 animate-in slide-in-from-right duration-200">
+      <div className="relative w-full max-w-3xl bg-[#0a0a0c] border-l border-zinc-800/80 flex flex-col h-full shadow-2xl z-10 animate-in slide-in-from-right duration-200">
         {/* Drawer Header */}
-        <div className="p-4 border-b border-zinc-800 bg-zinc-900/90 flex items-center justify-between">
+        <div className="p-4 border-b border-zinc-800/80 bg-[#101014] flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h2 className="text-base font-semibold text-zinc-100">
@@ -234,7 +249,7 @@ export const DiffDrawer: React.FC<DiffDrawerProps> = ({
               {taskId ? (
                 <>
                   <span className="text-zinc-600">/</span>
-                  <span className="text-zinc-500">{taskId}</span>
+                  <span className="text-zinc-400">{taskId}</span>
                 </>
               ) : null}
             </div>
@@ -243,7 +258,7 @@ export const DiffDrawer: React.FC<DiffDrawerProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60 transition-colors"
             title="Chiudi pannello (Esc)"
             aria-label="Chiudi pannello"
           >

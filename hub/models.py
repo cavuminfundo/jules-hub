@@ -1,11 +1,12 @@
 """
-Pydantic v2 Data Models for Jules Hub.
-Defines schemas for engine orchestration, worktree lifecycle, suggestions, and escalation.
+Pydantic v2 Data Models for Julius Hub.
+Defines schemas for engine orchestration, worktree lifecycle, suggestions, escalation,
+community settings, and session records.
 """
 
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class EngineMode(str, Enum):
@@ -27,6 +28,65 @@ class TaskStatus(str, Enum):
     READY_FOR_SENIOR = "ready_for_senior"
     NEEDS_SENIOR_FIX = "needs_senior_fix"
     COMPLETED = "completed"
+
+
+class GitAuthoringMode(str, Enum):
+    """Authoring attribution mode for git commits."""
+    CO_AUTHORED = "co_authored"
+    JULIUS_ONLY = "julius_only"
+    JULES_ONLY = "jules_only"
+    USER_ONLY = "user_only"
+
+
+class CommunitySettings(BaseModel):
+    """Community configuration settings for Julius Hub v3."""
+    model_config = ConfigDict(extra="ignore")
+
+    default_model: str = "Gemini 3.1 Pro"
+    auto_find_issues: bool = True
+    export_as_pr: bool = True
+    git_commit_authoring: GitAuthoringMode = GitAuthoringMode.CO_AUTHORED
+    only_respond_to_mentions: bool = False
+    open_pr_as_draft: bool = False
+    cdp_url: str = "http://127.0.0.1:9000"
+    workspaces_root: str = ""
+    github_token_masked: Optional[str] = None
+    cloud_api_key_masked: Optional[str] = None
+    has_github_token: bool = False
+    has_cloud_api_key: bool = False
+
+    @field_validator("git_commit_authoring", mode="before")
+    @classmethod
+    def normalize_git_commit_authoring(cls, value: Any) -> Any:
+        if value in ("jules_only", GitAuthoringMode.JULES_ONLY):
+            return GitAuthoringMode.JULIUS_ONLY
+        return value
+
+
+class SecretsUpdateRequest(BaseModel):
+    """Request payload to update sensitive tokens and API keys."""
+    model_config = ConfigDict(extra="ignore")
+
+    github_token: Optional[str] = None
+    gemini_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+
+
+class SessionRecord(BaseModel):
+    """Record of an executed prompt or curation session."""
+    model_config = ConfigDict(extra="ignore")
+
+    task_id: str
+    repo: str
+    title: str
+    prompt: Optional[str] = None
+    persona: str = "bolt"
+    status: TaskStatus = TaskStatus.PENDING
+    branch: Optional[str] = None
+    worktree_path: Optional[str] = None
+    diff: Optional[str] = None
+    pr_url: Optional[str] = None
+    created_at: str
 
 
 class Suggestion(BaseModel):
@@ -75,6 +135,7 @@ class RunRequest(BaseModel):
     persona: str = "bolt"
     target_file: Optional[str] = None
     issue_context: Optional[str] = None
+    prompt: Optional[str] = None
     mode: EngineMode = EngineMode.ANTIGRAVITY_FLASH
     branch: Optional[str] = None
     dry_run: bool = False
@@ -88,6 +149,7 @@ class RunResponse(BaseModel):
     status: TaskStatus = TaskStatus.PENDING
     worktree_path: Optional[str] = None
     branch: Optional[str] = None
+    diff: Optional[str] = None
     message: str = ""
 
 
@@ -286,8 +348,7 @@ class HubConfig(BaseModel):
 
     ollama_instances: List[OllamaInstance] = Field(
         default_factory=lambda: [
-            OllamaInstance(id=1, name="GPU Server 24/7", url="http://192.168.88.117:11434", enabled=True, timeout_sec=30),
-            OllamaInstance(id=2, name="Workstation RTX 5070 Ti", url="http://100.102.204.70:11434", enabled=True, timeout_sec=15),
+            OllamaInstance(id=1, name="Local Ollama", url="http://localhost:11434", enabled=True, timeout_sec=30),
         ]
     )
     junior_config: RoleModelConfig = Field(default_factory=RoleModelConfig)
@@ -299,6 +360,7 @@ class HubConfig(BaseModel):
     cdp_port: int = 9000
     max_diff_lines: int = 50
     repo_schedules: List[RepoScheduleConfig] = Field(default_factory=list)
+    settings: CommunitySettings = Field(default_factory=CommunitySettings)
 
 
 class SeniorReviewVerdict(str, Enum):
@@ -323,4 +385,5 @@ class HubState(BaseModel):
 
     ignored_suggestions: List[str] = Field(default_factory=list)
     task_reviews: Dict[str, SeniorReviewResult] = Field(default_factory=dict)
-
+    sessions: List[SessionRecord] = Field(default_factory=list)
+    task_diffs: Dict[str, str] = Field(default_factory=dict)

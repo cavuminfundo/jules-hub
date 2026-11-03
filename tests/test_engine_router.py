@@ -1,5 +1,5 @@
 """
-Unit tests for Jules Hub Multi-Engine Router (hub/engine_router.py).
+Unit tests for Julius Hub Multi-Engine Router (hub/engine_router.py).
 Tests Ollama local HTTP client, Antigravity Flash CLI runner, Hybrid mode,
 graceful fallbacks, process group kills on timeout, and path traversal guards.
 """

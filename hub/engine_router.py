@@ -1,5 +1,5 @@
 """
-Jules Hub Multi-Engine Router: Flash, Local Ollama, and Hybrid execution.
+Julius Hub Multi-Engine Router: Flash, Local Ollama, and Hybrid execution.
 Orchestrates AI-driven patch generation for micro-improvements across Bolt (Performance),
 Palette (UX/A11y), and Sentinel (Security) personas.
 
@@ -186,7 +186,7 @@ def apply_hunks_to_content(original_content: str, diff_text: str) -> Optional[st
 
 class EngineRouter:
     """
-    Multi-Engine Router for Jules Hub.
+    Multi-Engine Router for Julius Hub.
     Dispatches patch generation to Local Ollama, Antigravity Flash, or Hybrid modes,
     managing graceful fallbacks and strict scope ceilings (< 50 lines).
     """
@@ -725,17 +725,110 @@ class EngineRouter:
 
         return result
 
+    async def run_freeform_prompt(
+        self,
+        repo_path: Path,
+        prompt: str,
+        mode: Optional[EngineMode] = None,
+        persona: str = "bolt",
+    ) -> PatchResult:
+        """
+        Execute free-form prompt patch when target_file is omitted.
+        Attempts to locate candidate files in repository matching prompt or uses Flash/Local LLM.
+        """
+        resolved_repo = Path(repo_path).resolve()
+        if not resolved_repo.exists() or not resolved_repo.is_dir():
+            return PatchResult(
+                success=False,
+                error=f"Repository path does not exist or is not a directory: {repo_path}",
+                engine_used="freeform",
+            )
+
+        # 1. Detect candidate file name mentioned in prompt
+        file_candidates = re.findall(r"[\w\-./]+\.(?:py|tsx?|jsx?|json|html|css|yaml|yml|md|sh|txt)", prompt)
+        target_path: Optional[Path] = None
+
+        for cand in file_candidates:
+            p = (resolved_repo / cand).resolve()
+            if p.exists() and p.is_file() and p.is_relative_to(resolved_repo):
+                target_path = p
+                break
+            # Search by filename match
+            cand_name = Path(cand).name
+            matches = list(resolved_repo.rglob(cand_name))
+            valid_matches = [m for m in matches if m.is_file() and not any(part.startswith(".") for part in m.parts)]
+            if valid_matches:
+                target_path = valid_matches[0]
+                break
+
+        # 2. If no candidate found in prompt, look for primary source files
+        if not target_path:
+            for pattern in ["*.py", "*.ts", "*.js", "src/**/*.py", "src/**/*.ts"]:
+                matches = [m for m in resolved_repo.glob(pattern) if m.is_file() and not m.name.startswith(".")]
+                if matches:
+                    target_path = matches[0]
+                    break
+
+        if target_path:
+            rel_file = str(target_path.relative_to(resolved_repo))
+            logger.info("Free-form prompt identified target candidate file: %s", rel_file)
+            return await self.analyze_and_patch(
+                repo_path=resolved_repo,
+                persona=persona,
+                target_file=rel_file,
+                issue_context=prompt,
+                mode=mode,
+            )
+
+        # 3. Fallback: try headless flash command in repo if available
+        selected_mode = mode or self.default_mode
+        if selected_mode == EngineMode.ANTIGRAVITY_FLASH:
+            cmd = [
+                self.agy_bin,
+                "--model", "flash",
+                "--mode", "auto",
+                "--output-format", "stream-json",
+                "--prompt", prompt,
+            ]
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    cwd=str(resolved_repo),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await asyncio.wait_for(proc.communicate(), timeout=self.subprocess_timeout)
+                git_diff = get_git_diff(resolved_repo)
+                if git_diff:
+                    lines_changed = count_diff_lines(git_diff)
+                    return PatchResult(
+                        success=True,
+                        diff=git_diff,
+                        lines_changed=lines_changed,
+                        engine_used="antigravity_flash",
+                    )
+            except Exception as e:
+                logger.warning("Headless prompt execution failed: %s", e)
+
+        return PatchResult(
+            success=False,
+            error="Could not identify target candidate file from prompt",
+            engine_used="freeform",
+        )
+
     async def analyze_and_patch(
         self,
         repo_path: Path,
         persona: str,
-        target_file: str,
-        issue_context: str,
+        target_file: Optional[str] = None,
+        issue_context: str = "",
         mode: Optional[EngineMode] = None,
+        prompt: Optional[str] = None,
     ) -> PatchResult:
         """
         Analyze the issue and generate an atomic patch (< 50 lines).
         Dispatches to the requested engine mode with automatic graceful fallback.
+        Supports free-form prompt execution when target_file is omitted.
         """
         # Validate repository path
         resolved_repo = Path(repo_path).resolve()
@@ -745,10 +838,23 @@ class EngineRouter:
                 error=f"Repository path does not exist or is not a directory: {repo_path}",
             )
 
+        # Free-form prompt dispatch if target_file is omitted
+        if not target_file:
+            return await self.run_freeform_prompt(
+                repo_path=resolved_repo,
+                prompt=prompt or issue_context,
+                mode=mode,
+                persona=persona,
+            )
+
         # Path traversal guard and target file existence
         try:
             target_path = (resolved_repo / target_file).resolve()
-            target_path.relative_to(resolved_repo)
+            if not target_path.is_relative_to(resolved_repo):
+                return PatchResult(
+                    success=False,
+                    error=f"Path traversal detected in target file path: {target_file}",
+                )
         except (ValueError, Exception):
             return PatchResult(
                 success=False,
@@ -791,7 +897,7 @@ class EngineRouter:
                 repo_path=resolved_repo,
                 target_path=target_path,
                 persona_key=persona_key,
-                issue_context=issue_context,
+                issue_context=issue_context or prompt or "",
             )
             if not result.success and self.allow_fallback:
                 logger.warning(
@@ -802,7 +908,7 @@ class EngineRouter:
                     repo_path=resolved_repo,
                     target_path=target_path,
                     persona_key=persona_key,
-                    issue_context=issue_context,
+                    issue_context=issue_context or prompt or "",
                 )
                 if local_res.success:
                     local_res.engine_used = "local (fallback from flash)"
@@ -819,7 +925,7 @@ class EngineRouter:
                 repo_path=resolved_repo,
                 target_path=target_path,
                 persona_key=persona_key,
-                issue_context=issue_context,
+                issue_context=issue_context or prompt or "",
             )
 
         elif selected_mode == EngineMode.LOCAL:
@@ -827,7 +933,7 @@ class EngineRouter:
                 repo_path=resolved_repo,
                 target_path=target_path,
                 persona_key=persona_key,
-                issue_context=issue_context,
+                issue_context=issue_context or prompt or "",
             )
 
         return PatchResult(
@@ -845,6 +951,8 @@ class EngineRouter:
         """
         Execute Senior Review audit gate on proposed diff.
         Enforces strict scope ceiling (<50 lines) and checks test results & security hygiene.
+        Real LLM review via Cloud API (Gemini) or Ollama when configured;
+        Deterministic static AST/safety audit on real diff in CDP/fallback mode.
         """
         lines_changed = count_diff_lines(diff_text)
         if lines_changed > 50:
@@ -867,6 +975,34 @@ class EngineRouter:
             '- "security_notes": "notes on safety and security"\n'
         )
 
+        # 1. Cloud API review if GEMINI_API_KEY is available
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if gemini_api_key and senior_config.provider in ("gemini", "cloud"):
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{senior_config.model_name}:generateContent?key={gemini_api_key}"
+                async with httpx.AsyncClient(timeout=self.http_timeout) as client:
+                    resp = await client.post(
+                        url,
+                        json={
+                            "contents": [{"parts": [{"text": prompt}]}],
+                            "generationConfig": {"responseMimeType": "application/json"},
+                        },
+                    )
+                    if resp.status_code == 200:
+                        raw = resp.json()
+                        text_resp = raw["candidates"][0]["content"]["parts"][0]["text"]
+                        data = json.loads(text_resp)
+                        return SeniorReviewResult(
+                            verdict=data.get("verdict", "APPROVED").upper(),
+                            simple_explanation=data.get("simple_explanation", "Code passed senior review audit via Gemini."),
+                            security_notes=data.get("security_notes", "No security issues identified."),
+                            reviewer_model=senior_config.model_name,
+                            reviewed_at=datetime.now(timezone.utc).isoformat(),
+                        )
+            except Exception as e:
+                logger.warning("Cloud Gemini senior review failed: %s; falling back to static audit", e)
+
+        # 2. Ollama review if configured
         if senior_config.provider == "ollama":
             try:
                 async with httpx.AsyncClient(timeout=self.http_timeout) as client:
@@ -886,15 +1022,59 @@ class EngineRouter:
             except Exception as e:
                 logger.warning("Ollama senior review failed: %s; falling back to heuristic audit", e)
 
-        is_safe = "eval(" not in diff_text and "os.system(" not in diff_text and "__import__" not in diff_text
+        # 3. Real static inspection of diff lines
+        hazardous_tokens = [
+            "eval(",
+            "os.system(",
+            "exec(",
+            "__import__",
+            "subprocess.call(",
+            "subprocess.Popen(",
+            "shell=True",
+        ]
+        hazardous_found = []
+        for line in diff_text.splitlines():
+            if line.startswith("+") and not line.startswith("+++"):
+                for tok in hazardous_tokens:
+                    if tok in line:
+                        hazardous_found.append(tok)
+
+        is_safe = len(hazardous_found) == 0
         is_passed = str(test_status).lower() in ("passed", "success", "ok", "true")
         approved = is_safe and is_passed
 
+        rejection_reasons = []
+        if not is_passed:
+            rejection_reasons.append("Automated test gate did not pass.")
+        if not is_safe:
+            rejection_reasons.append(f"Hazardous pattern detected: {', '.join(hazardous_found)}.")
+
+        explanation = (
+            f"Patch ({lines_changed} lines changed) verified against test gates and atomic scope constraints."
+            if approved
+            else " ".join(rejection_reasons)
+        )
+        security_notes = (
+            "Safe execution confirmed; no shell injection or unsafe calls."
+            if is_safe
+            else f"Security risk: hazardous code execution pattern detected ({', '.join(hazardous_found)})."
+        )
+
         return SeniorReviewResult(
             verdict="APPROVED" if approved else "REJECTED",
-            simple_explanation="Patch verified against test gates and atomic scope constraints." if approved else "Tests failed or hazardous patterns detected in patch.",
-            security_notes="Safe execution confirmed; no shell injection or unsafe calls." if is_safe else "Security risk: unsafe code execution pattern detected.",
+            simple_explanation=explanation,
+            security_notes=security_notes,
             reviewer_model=senior_config.model_name,
             reviewed_at=datetime.now(timezone.utc).isoformat(),
         )
+
+
+async def run_freeform_prompt(
+    repo_path: Path,
+    prompt: str,
+    mode: Optional[EngineMode] = None,
+) -> PatchResult:
+    """Helper function to execute free-form prompt against repository."""
+    router = EngineRouter()
+    return await router.run_freeform_prompt(repo_path, prompt, mode=mode)
 

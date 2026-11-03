@@ -1,10 +1,11 @@
 /**
- * Jules Hub API Client and SSE EventSource Streaming Hooks.
+ * Julius Hub API Client and SSE EventSource Streaming Hooks.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type {
   CDPResponse,
+  CommunitySettings,
   CreatePrResponse,
   EscalateRequest,
   HealthResponse,
@@ -15,7 +16,9 @@ import type {
   PruneResponse,
   RunRequest,
   RunResponse,
+  SecretsUpdateRequest,
   SeniorReviewResult,
+  SessionRecord,
   SSELogPayload,
   Suggestion,
   TaskStatus,
@@ -168,6 +171,20 @@ export const api = {
       `/api/scheduler/${encodeURIComponent(repoName)}/trigger`,
       { method: 'POST' }
     ),
+
+  getSessions: (repo?: string) => {
+    const query = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    return request<SessionRecord[]>(`/api/sessions${query}`);
+  },
+
+  getTask: (taskId: string) =>
+    request<SessionRecord>(`/api/tasks/${encodeURIComponent(taskId)}`),
+
+  saveSecrets: (req: SecretsUpdateRequest) =>
+    request<CommunitySettings>('/api/settings/secrets', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
 };
 
 /**

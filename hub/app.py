@@ -1,14 +1,17 @@
 """
-Jules Hub FastAPI Server.
+Julius Hub FastAPI Server.
 Provides REST and SSE endpoints for worktree lifecycle, engine execution,
-suggestions scanning, CDP escalation to Antigravity, and conditional UI serving.
+suggestions scanning, CDP escalation to Antigravity, community configuration, and SPA serving.
 """
 
 import asyncio
+from datetime import datetime, timezone
 import json
 import logging
 import os
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Any, Dict, List, Optional, Union
 import uuid
 
@@ -19,17 +22,21 @@ from fastapi.staticfiles import StaticFiles
 
 from hub.cdp_bridge import CDPBridge, CDPResponse, probe_ollama_instance
 from hub.config_store import ConfigStore
-from hub.engine_router import EngineRouter
+from hub.engine_router import EngineRouter, get_git_diff
 from hub.models import (
+    CommunitySettings,
     EngineMode,
     EscalateRequest,
+    GitAuthoringMode,
     HubConfig,
     OllamaInstance,
     PatchResult,
     RoleModelConfig,
     RunRequest,
     RunResponse,
+    SecretsUpdateRequest,
     SeniorReviewResult,
+    SessionRecord,
     Suggestion,
     TaskStatus,
     WorktreePruneRequest,
@@ -90,17 +97,34 @@ async def execute_run_task(task_id: str, req: RunRequest, app_state: Any) -> Run
     task_mgr: TaskLogManager = app_state.task_manager
     wm: WorktreeManager = app_state.worktree_manager
     router: EngineRouter = app_state.engine_router
+    store: ConfigStore = app_state.config_store
 
     task_mgr.set_status(task_id, TaskStatus.RUNNING)
     task_mgr.add_log(task_id, f"Starting curation run for '{req.repo}' (persona: {req.persona}, mode: {req.mode})")
+
+    title = req.prompt or (f"Patch {req.target_file}" if req.target_file else f"Curation {task_id}")
 
     if req.dry_run:
         task_mgr.add_log(task_id, "Dry-run enabled: skipping worktree creation and code modifications.")
         task_mgr.set_status(task_id, TaskStatus.PASSED)
         task_mgr.add_log(task_id, "Dry-run execution completed.")
+        session_rec = SessionRecord(
+            task_id=task_id,
+            repo=req.repo,
+            title=title,
+            prompt=req.prompt,
+            persona=req.persona,
+            status=TaskStatus.PASSED,
+            branch=req.branch,
+            worktree_path=None,
+            diff=None,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        store.upsert_session(session_rec)
         return RunResponse(
             task_id=task_id,
             status=TaskStatus.PASSED,
+            diff=None,
             message="Dry run completed successfully (no changes applied)",
         )
 
@@ -121,33 +145,62 @@ async def execute_run_task(task_id: str, req: RunRequest, app_state: Any) -> Run
         async with session as ctx:
             task_mgr.add_log(task_id, f"Worktree spawned at: {ctx.worktree_path}")
 
-            # Apply patch if target_file is provided
+            patch_res: Optional[PatchResult] = None
             if req.target_file:
                 task_mgr.add_log(task_id, f"Generating micro-patch on {req.target_file} via {req.mode}...")
-                patch_res: PatchResult = await router.analyze_and_patch(
+                patch_res = await router.analyze_and_patch(
                     repo_path=ctx.worktree_path,
                     persona=req.persona,
                     target_file=req.target_file,
-                    issue_context=req.issue_context,
+                    issue_context=req.issue_context or req.prompt or "",
                     mode=req.mode,
+                    prompt=req.prompt,
                 )
-                if not patch_res.success:
-                    task_mgr.add_log(task_id, f"Patch generation failed: {patch_res.error}")
-                    task_mgr.set_status(task_id, TaskStatus.FAILED)
-                    return RunResponse(
-                        task_id=task_id,
-                        status=TaskStatus.FAILED,
-                        worktree_path=str(ctx.worktree_path),
-                        branch=ctx.branch,
-                        message=f"Patch generation failed: {patch_res.error}",
-                    )
+            elif req.prompt:
+                task_mgr.add_log(task_id, f"Generating patch from prompt '{req.prompt}' via {req.mode}...")
+                patch_res = await router.run_freeform_prompt(
+                    repo_path=ctx.worktree_path,
+                    prompt=req.prompt,
+                    mode=req.mode,
+                    persona=req.persona,
+                )
 
+            if patch_res and not patch_res.success:
+                task_mgr.add_log(task_id, f"Patch generation failed: {patch_res.error}")
+                task_mgr.set_status(task_id, TaskStatus.FAILED)
+                fail_rec = SessionRecord(
+                    task_id=task_id,
+                    repo=req.repo,
+                    title=title,
+                    prompt=req.prompt,
+                    persona=req.persona,
+                    status=TaskStatus.FAILED,
+                    branch=ctx.branch,
+                    worktree_path=str(ctx.worktree_path),
+                    diff=None,
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                )
+                store.upsert_session(fail_rec)
+                return RunResponse(
+                    task_id=task_id,
+                    status=TaskStatus.FAILED,
+                    worktree_path=str(ctx.worktree_path),
+                    branch=ctx.branch,
+                    diff=None,
+                    message=f"Patch generation failed: {patch_res.error}",
+                )
+
+            if patch_res and patch_res.success:
                 task_mgr.add_log(
                     task_id,
                     f"Patch applied successfully ({patch_res.lines_changed} lines changed via {patch_res.engine_used})",
                 )
-                if patch_res.diff:
-                    task_mgr.add_log(task_id, f"Diff preview:\n{patch_res.diff}")
+
+            # Capture real diff from worktree
+            real_diff = (patch_res.diff if patch_res and patch_res.diff else None) or get_git_diff(ctx.worktree_path)
+            if real_diff:
+                store.set_task_diff(task_id, real_diff)
+                task_mgr.add_log(task_id, f"Diff preview ({len(real_diff.splitlines())} lines):\n{real_diff}")
 
             # Execute automated test suite
             task_mgr.set_status(task_id, TaskStatus.TESTING)
@@ -155,27 +208,39 @@ async def execute_run_task(task_id: str, req: RunRequest, app_state: Any) -> Run
             test_passed, test_output = await wm.run_tests_async(ctx.worktree_path)
             task_mgr.add_log(task_id, f"Test output:\n{test_output}")
 
+            final_status = TaskStatus.PASSED if test_passed else TaskStatus.NEEDS_ESCALATION
             if test_passed:
                 ctx.mark_success()
                 task_mgr.set_status(task_id, TaskStatus.PASSED)
                 task_mgr.add_log(task_id, "Test gate PASSED! Worktree ready for review/escalation.")
-                return RunResponse(
-                    task_id=task_id,
-                    status=TaskStatus.PASSED,
-                    worktree_path=str(ctx.worktree_path),
-                    branch=ctx.branch,
-                    message="Patch and tests passed successfully",
-                )
+                msg = "Patch and tests passed successfully"
             else:
                 task_mgr.set_status(task_id, TaskStatus.NEEDS_ESCALATION)
                 task_mgr.add_log(task_id, "Test gate FAILED. Worktree preserved for Senior escalation.")
-                return RunResponse(
-                    task_id=task_id,
-                    status=TaskStatus.NEEDS_ESCALATION,
-                    worktree_path=str(ctx.worktree_path),
-                    branch=ctx.branch,
-                    message="Tests failed in worktree; senior review required",
-                )
+                msg = "Tests failed in worktree; senior review required"
+
+            session_rec = SessionRecord(
+                task_id=task_id,
+                repo=req.repo,
+                title=title,
+                prompt=req.prompt,
+                persona=req.persona,
+                status=final_status,
+                branch=ctx.branch,
+                worktree_path=str(ctx.worktree_path),
+                diff=real_diff,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+            store.upsert_session(session_rec)
+
+            return RunResponse(
+                task_id=task_id,
+                status=final_status,
+                worktree_path=str(ctx.worktree_path),
+                branch=ctx.branch,
+                diff=real_diff,
+                message=msg,
+            )
 
     except Exception as e:
         logger.exception("Error executing run task %s: %s", task_id, e)
@@ -184,6 +249,7 @@ async def execute_run_task(task_id: str, req: RunRequest, app_state: Any) -> Run
         return RunResponse(
             task_id=task_id,
             status=TaskStatus.FAILED,
+            diff=None,
             message=f"Task error: {e}",
         )
 
@@ -196,11 +262,11 @@ def create_app(
     config_store: Optional[ConfigStore] = None,
     scheduler: Optional[BackgroundScheduler] = None,
 ) -> FastAPI:
-    """Create and configure the Jules Hub FastAPI application."""
+    """Create and configure the Julius Hub FastAPI application."""
     app = FastAPI(
-        title="Jules Hub",
+        title="Julius Hub",
         description="Autonomous Junior Coder Hub with Isolated Git Worktrees and Antigravity CDP Escalation",
-        version="0.2.1",
+        version="0.3.0",
     )
 
     # CORS Middleware
@@ -231,8 +297,8 @@ def create_app(
         """Health check endpoint."""
         return {
             "status": "ok",
-            "service": "jules-hub",
-            "version": "0.2.1",
+            "service": "julius-hub",
+            "version": "0.3.0",
         }
 
     @app.get("/api/projects")
@@ -297,6 +363,31 @@ def create_app(
             )
         else:
             return await execute_run_task(task_id, req, app.state)
+
+    @app.get("/api/sessions", response_model=List[SessionRecord])
+    async def get_sessions(repo: Optional[str] = Query(None, description="Filter by repository")):
+        """List executed prompt and curation sessions."""
+        return app.state.config_store.list_sessions(repo=repo)
+
+    @app.get("/api/tasks/{task_id}")
+    async def get_task_detail(task_id: str):
+        """Retrieve full details of an executed task including worktree diff."""
+        session = app.state.config_store.get_session(task_id)
+        diff = app.state.config_store.get_task_diff(task_id)
+        review = app.state.config_store.get_task_review(task_id)
+        if not session and not diff and not review:
+            raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found")
+        return {
+            "task_id": task_id,
+            "session": session,
+            "diff": diff,
+            "review": review,
+        }
+
+    @app.post("/api/settings/secrets", response_model=CommunitySettings)
+    async def update_secrets(req: SecretsUpdateRequest):
+        """Securely persist GitHub token and AI API keys with 0600 file permissions."""
+        return app.state.config_store.save_secrets(req)
 
     @app.post("/api/escalate", response_model=CDPResponse)
     async def escalate_to_antigravity(req: EscalateRequest):
@@ -378,16 +469,16 @@ def create_app(
             },
         )
 
-    # --- v2 Cockpit REST API Endpoints ---
+    # --- v2/v3 Cockpit REST API Endpoints ---
 
     @app.get("/api/config", response_model=HubConfig)
     async def get_config():
-        """Retrieve current Jules Hub v2 configuration."""
+        """Retrieve current Julius Hub configuration without exposing plaintext secrets."""
         return app.state.config_store.load_config()
 
     @app.put("/api/config", response_model=HubConfig)
     async def update_config(config: HubConfig):
-        """Update and persist Jules Hub v2 configuration atomically."""
+        """Update and persist Julius Hub configuration atomically."""
         app.state.config_store.save_config(config)
         return config
 
@@ -425,17 +516,17 @@ def create_app(
     ):
         """
         Execute Senior Review audit gate on task worktree diff.
-        Persists verdict and explanations in hub state.
+        Loads real worktree diff from config store if not provided in request.
         """
         router: EngineRouter = app.state.engine_router
         cfg: HubConfig = app.state.config_store.load_config()
         resolved_diff = None
-        if body and isinstance(body, dict) and "diff_text" in body and body["diff_text"]:
+        if body and isinstance(body, dict) and body.get("diff_text"):
             resolved_diff = body["diff_text"]
         elif diff_text:
             resolved_diff = diff_text
         else:
-            resolved_diff = "+ sample diff"
+            resolved_diff = app.state.config_store.get_task_diff(task_id) or ""
 
         result = await router.run_senior_review(
             diff_text=resolved_diff,
@@ -451,6 +542,7 @@ def create_app(
         """
         Create GitHub Pull Request from task worktree.
         Strict Gate: Rejects with HTTP 403 Forbidden if task was not APPROVED by Senior Review.
+        Executes real git commit, push, and gh pr create when repository and gh CLI are available.
         """
         review = app.state.config_store.get_task_review(task_id)
         if not review or review.verdict != "APPROVED":
@@ -460,11 +552,68 @@ def create_app(
                 detail=f"PR creation forbidden: task '{task_id}' has not been APPROVED by Senior Review (current verdict: {current_verdict})",
             )
 
+        cfg: HubConfig = app.state.config_store.load_config()
+        session = app.state.config_store.get_session(task_id)
+        branch = (session.branch if session else None) or f"curator/task-{task_id}"
+        wt_path = Path(session.worktree_path) if session and session.worktree_path else None
+
+        # Authoring attribution trailer
+        authoring = cfg.settings.git_commit_authoring
+        co_author_trailer = ""
+        if authoring == GitAuthoringMode.CO_AUTHORED:
+            co_author_trailer = "\n\nCo-authored-by: Julius <julius@julius-hub.local>"
+        elif authoring in (GitAuthoringMode.JULIUS_ONLY, GitAuthoringMode.JULES_ONLY):
+            co_author_trailer = "\n\nAuthor: Julius <julius@julius-hub.local>"
+
+        pr_url = f"local://worktree/{task_id}/branch/{branch}"
+        pr_message = f"PR created successfully following Senior Review approval by {review.reviewer_model}"
+
+        # Real git commit & gh PR execution if worktree exists and gh CLI is available
+        if wt_path and wt_path.exists() and shutil.which("gh"):
+            env = os.environ.copy()
+            secrets = app.state.config_store.get_secrets()
+            gh_tok = secrets.get("github_token") or os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
+            if gh_tok:
+                env["GITHUB_TOKEN"] = gh_tok
+                env["GH_TOKEN"] = gh_tok
+
+            commit_msg = f"fix({task_id}): automated improvement by Julius{co_author_trailer}"
+            try:
+                subprocess.run(["git", "add", "-A"], cwd=str(wt_path), check=False, env=env, timeout=10)
+                subprocess.run(["git", "commit", "-m", commit_msg], cwd=str(wt_path), check=False, env=env, timeout=10)
+                push_res = subprocess.run(
+                    ["git", "push", "-u", "origin", branch],
+                    cwd=str(wt_path),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    env=env,
+                    timeout=30,
+                )
+                if push_res.returncode == 0:
+                    gh_cmd = [
+                        "gh", "pr", "create",
+                        "--title", f"fix: Julius automated patch for {task_id}",
+                        "--body", f"Automated patch reviewed and approved by {review.reviewer_model}.{co_author_trailer}",
+                    ]
+                    if cfg.settings.open_pr_as_draft:
+                        gh_cmd.append("--draft")
+                    pr_res = subprocess.run(gh_cmd, cwd=str(wt_path), capture_output=True, text=True, check=False, env=env, timeout=30)
+                    if pr_res.returncode == 0 and pr_res.stdout.strip():
+                        pr_url = pr_res.stdout.strip()
+                        pr_message = f"Pull Request opened on GitHub: {pr_url}"
+            except Exception as e:
+                logger.warning("Real git/gh PR creation encountered exception: %s; falling back to worktree URL", e)
+
+        if session:
+            session.pr_url = pr_url
+            app.state.config_store.upsert_session(session)
+
         return {
             "success": True,
             "task_id": task_id,
-            "pr_url": f"https://github.com/example/jules/pull/{task_id}",
-            "message": f"PR created successfully following Senior Review approval by {review.reviewer_model}",
+            "pr_url": pr_url,
+            "message": pr_message,
         }
 
     @app.post("/api/scheduler/{repo_name}/trigger")
@@ -485,13 +634,16 @@ def create_app(
             index_file = dist_dir / "index.html"
             if index_file.is_file():
                 return FileResponse(index_file)
-            return {"service": "jules-hub", "status": "running"}
+            return {"service": "julius-hub", "status": "running"}
 
         @app.get("/{full_path:path}")
         async def serve_spa_fallback(full_path: str):
-            candidate = dist_dir / full_path
-            if candidate.is_file():
-                return FileResponse(candidate)
+            candidate = (dist_dir / full_path).resolve()
+            try:
+                if candidate.is_relative_to(dist_dir) and candidate.is_file():
+                    return FileResponse(candidate)
+            except (ValueError, Exception):
+                pass
             index_file = dist_dir / "index.html"
             if index_file.is_file():
                 return FileResponse(index_file)
@@ -500,7 +652,7 @@ def create_app(
         @app.get("/")
         async def root_fallback():
             return {
-                "service": "jules-hub",
+                "service": "julius-hub",
                 "status": "running",
                 "ui": "not_built",
             }

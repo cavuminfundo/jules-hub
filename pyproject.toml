@@ -1,5 +1,5 @@
 [project]
-name = "jules-hub"
+name = "julius-hub"
 version = "0.2.1"
 description = "Autonomous junior AI coder runner & tech lead cockpit"
 dependencies = [

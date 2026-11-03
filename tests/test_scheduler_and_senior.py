@@ -55,7 +55,7 @@ async def test_probe_ollama_instance_success():
     }
 
     with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_resp):
-        result = await probe_ollama_instance("http://192.168.88.117:11434", timeout=2.0)
+        result = await probe_ollama_instance("http://localhost:11434", timeout=2.0)
         assert result["online_status"] is True
         assert "qwen2.5-coder:latest" in result["models_list"]
         assert "deepseek-coder:6.7b" in result["models_list"]
@@ -252,7 +252,8 @@ def test_api_config_routes(tmp_path: Path):
     get_resp = client.get("/api/config")
     assert get_resp.status_code == 200
     data = get_resp.json()
-    assert len(data["ollama_instances"]) >= 2
+    assert len(data["ollama_instances"]) == 1
+    assert "localhost" in data["ollama_instances"][0]["url"]
     assert data["cdp_port"] == 9000
 
     data["max_diff_lines"] = 35
